@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/imports"
@@ -22,16 +23,29 @@ var (
 	packageName string
 	goDir       string
 	jsDir       string
+	swaggerFile string
 	dry         bool
 	filter      string
+	verbose     bool
 )
 
 func init() {
 	flag.StringVar(&packageName, "package_name", "", "Name of the package for the model code (default is the same as the source package).")
 	flag.StringVar(&goDir, "go_dir", "", "Directory to output model code to (default is the same directory as the source files).")
-	flag.StringVar(&jsDir, "js_dir", "", "Directory to output JavaScript code to (default is the ../client/src/ducks relative to the source files).")
+	flag.StringVar(&jsDir, "js_dir", "", "Directory to output JavaScript code to (default is ../client/src/ducks relative to the source files).")
+	flag.StringVar(&swaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
 	flag.BoolVar(&dry, "dry", false, "Dry run (don't write files).")
 	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
+	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
+}
+
+func logTime(s string, fn func()) {
+	a := time.Now()
+	fn()
+	b := time.Now()
+	if verbose {
+		fmt.Printf("%s took %s\n", s, b.Sub(a))
+	}
 }
 
 func main() {
@@ -55,7 +69,9 @@ func main() {
 
 	fmt.Printf("\n")
 
-	packages.PrintErrors(pkgs)
+	if verbose {
+		packages.PrintErrors(pkgs)
+	}
 
 	for _, pkg := range pkgs {
 		if goDir == "" {
@@ -73,11 +89,15 @@ func main() {
 		if jsDir == "" {
 			jsDir = filepath.Join(goDir, "../client/src/ducks")
 		}
+		if swaggerFile == "" {
+			swaggerFile = filepath.Join(goDir, "../static/swagger.json")
+		}
 
 		writers := []writer{
 			NewAPIWriter(goDir),
 			NewSQLWriter(goDir),
 			NewJSWriter(jsDir),
+			NewSwaggerWriter(swaggerFile),
 		}
 
 		if packageName == "" {
@@ -150,40 +170,58 @@ func main() {
 			}
 
 			for _, w := range writers {
-				filename := w.File(typeName)
+				filename := w.File(typeName, namedType, structType)
 
 				log.Printf("working on %s (%s)", typeName, filename)
 
 				buf := bytes.NewBuffer(nil)
 
 				if w.Language() == "go" {
-					if err := headerTemplate.Execute(buf, struct {
-						PackageName string
-						Imports     []string
-					}{packageName, w.Imports()}); err != nil {
-						log.Fatalf("error writing header for %s (%s): %s", typeName, w.Name(), err.Error())
-					}
+					logTime("executing go header template", func() {
+						if err := headerTemplate.Execute(buf, struct {
+							PackageName string
+							Imports     []string
+						}{packageName, w.Imports()}); err != nil {
+							log.Fatalf("error writing header for %s (%s): %s", typeName, w.Name(), err.Error())
+						}
+					})
 				}
 
-				if err := w.Write(buf, typeName, namedType, structType); err != nil {
-					log.Fatalf("error generating code for %s (%s): %s", typeName, w.Name(), err.Error())
-				}
+				logTime("executing logic", func() {
+					if err := w.Write(buf, typeName, namedType, structType); err != nil {
+						log.Fatalf("error generating code for %s (%s): %s", typeName, w.Name(), err.Error())
+					}
+				})
 
 				nice := buf.Bytes()
 
 				if w.Language() == "go" {
-					d, err := imports.Process(filename, nice, nil)
-					if err != nil {
-						log.Fatalf("error formatting code for %s (%s): %s", typeName, w.Name(), err.Error())
-					}
-					nice = d
+					logTime("formatting go code", func() {
+						d, err := imports.Process(filename, nice, nil)
+						if err != nil {
+							log.Fatalf("error formatting code for %s (%s): %s", typeName, w.Name(), err.Error())
+						}
+						nice = d
+					})
 				}
 
 				if !dry {
-					if err := ioutil.WriteFile(filename, nice, 0644); err != nil {
-						log.Fatalf("error writing code for %s (%s): %s", typeName, w.Name(), err.Error())
-					}
+					logTime("writing file", func() {
+						if err := ioutil.WriteFile(filename, nice, 0644); err != nil {
+							log.Fatalf("error writing code for %s (%s): %s", typeName, w.Name(), err.Error())
+						}
+					})
 				}
+			}
+		}
+
+		for _, w := range writers {
+			if f, ok := w.(finisher); ok {
+				logTime("finishing writer", func() {
+					if err := f.Finish(dry); err != nil {
+						panic(err)
+					}
+				})
 			}
 		}
 	}

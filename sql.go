@@ -15,7 +15,7 @@ func NewSQLWriter(dir string) *SQLWriter { return &SQLWriter{Dir: dir} }
 
 func (SQLWriter) Name() string     { return "sql" }
 func (SQLWriter) Language() string { return "go" }
-func (w SQLWriter) File(typeName string) string {
+func (w SQLWriter) File(typeName string, _ *types.Named, _ *types.Struct) string {
 	return w.Dir + "/" + strings.ToLower(typeName) + "_sql.go"
 }
 
@@ -51,8 +51,8 @@ var sqlTypes = map[string]string{
 }
 
 func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
-	pluralSnake, pluralCamel := pluralFor(namedType.Obj().Name())
-	singularSnake, singularCamel := singularFor(namedType.Obj().Name())
+	pluralSnake, _ := pluralFor(namedType.Obj().Name())
+	_, singularCamel := singularFor(namedType.Obj().Name())
 
 	var (
 		fields          []sqlField
@@ -158,8 +158,6 @@ func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named,
 		Name:            namedType.Obj().Name(),
 		TableName:       tableName,
 		PluralSnake:     pluralSnake,
-		PluralCamel:     pluralCamel,
-		SingularSnake:   singularSnake,
 		SingularCamel:   singularCamel,
 		Fields:          fields,
 		CreateFields:    createFields,
@@ -182,8 +180,6 @@ type sqlTemplateData struct {
 	Name            string
 	TableName       string
 	PluralSnake     string
-	PluralCamel     string
-	SingularSnake   string
 	SingularCamel   string
 	Fields          []sqlField
 	CreateFields    []sqlField
