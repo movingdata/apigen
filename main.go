@@ -26,6 +26,7 @@ var (
 	swaggerFile string
 	dry         bool
 	filter      string
+	writers     string
 	verbose     bool
 )
 
@@ -36,6 +37,7 @@ func init() {
 	flag.StringVar(&swaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
 	flag.BoolVar(&dry, "dry", false, "Dry run (don't write files).")
 	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
+	flag.StringVar(&writers, "writers", "api,sql,js,swagger", "Run only the specified writers.")
 	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
 }
 
@@ -73,6 +75,14 @@ func main() {
 		packages.PrintErrors(pkgs)
 	}
 
+	writerMap := make(map[string]bool)
+	for _, s := range strings.Split(writers, ",") {
+		if s == "" {
+			continue
+		}
+		writerMap[s] = true
+	}
+
 	for _, pkg := range pkgs {
 		if goDir == "" {
 			goDir = pkg.PkgPath
@@ -93,11 +103,19 @@ func main() {
 			swaggerFile = filepath.Join(goDir, "../static/swagger.json")
 		}
 
-		writers := []writer{
-			NewAPIWriter(goDir),
-			NewSQLWriter(goDir),
-			NewJSWriter(jsDir),
-			NewSwaggerWriter(swaggerFile),
+		var writerList []writer
+
+		if len(writerMap) == 0 || writerMap["api"] {
+			writerList = append(writerList, NewAPIWriter(goDir))
+		}
+		if len(writerMap) == 0 || writerMap["sql"] {
+			writerList = append(writerList, NewSQLWriter(goDir))
+		}
+		if len(writerMap) == 0 || writerMap["js"] {
+			writerList = append(writerList, NewJSWriter(jsDir))
+		}
+		if len(writerMap) == 0 || writerMap["swagger"] {
+			writerList = append(writerList, NewSwaggerWriter(swaggerFile))
 		}
 
 		if packageName == "" {
@@ -169,7 +187,7 @@ func main() {
 				continue
 			}
 
-			for _, w := range writers {
+			for _, w := range writerList {
 				filename := w.File(typeName, namedType, structType)
 
 				log.Printf("working on %s (%s)", typeName, filename)
@@ -215,7 +233,7 @@ func main() {
 			}
 		}
 
-		for _, w := range writers {
+		for _, w := range writerList {
 			if f, ok := w.(finisher); ok {
 				logTime("finishing writer", func() {
 					if err := f.Finish(dry); err != nil {
