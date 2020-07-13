@@ -1012,6 +1012,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't fetch previous state")
   }
 
+{{if $Type.HasUpdatedAt}}
+  if !input.UpdatedAt.Equal(p.UpdatedAt) {
+    return nil, errors.Errorf("{{$Type.Singular}}APISave: UpdatedAt from input did not match current state")
+  }
+{{end}}
+
 {{range $Field := $Type.Fields}}
 {{- if $Field.IgnoreInput }}
   input.{{$Field.GoName}} = p.{{$Field.GoName}}
