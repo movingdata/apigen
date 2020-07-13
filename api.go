@@ -1014,7 +1014,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 
 {{if $Type.HasUpdatedAt}}
   if !input.UpdatedAt.Equal(p.UpdatedAt) {
-    return nil, errors.Errorf("{{$Type.Singular}}APISave: UpdatedAt from input did not match current state")
+    return nil, errors.Wrap(ErrTimestampMismatch, "{{$Type.Singular}}APISave: UpdatedAt from input did not match current state")
   }
 {{end}}
 
