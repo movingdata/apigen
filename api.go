@@ -33,6 +33,7 @@ func (APIWriter) Imports() []string {
 		"gopkg.in/vmihailenco/msgpack.v2",
 		"movingdata.com/p/wbi/internal/apihelpers",
 		"movingdata.com/p/wbi/internal/apitypes",
+		"movingdata.com/p/wbi/internal/changeregistry",
 		"movingdata.com/p/wbi/internal/cookiesession",
 		"movingdata.com/p/wbi/internal/trace",
 	}
@@ -75,6 +76,13 @@ func init() {
 }
 {{- end}}
 {{- end}}
+
+func init() {
+  registerFinder("{{$Type.Singular}}", func(mctx *ModelContext, ctx context.Context, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
+    v, err := mctx.{{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
+    return v, err
+  })
+}
 
 func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} {
   v, err := jsctx.mctx.{{$Type.Singular}}APIGet(jsctx.ctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
@@ -841,6 +849,8 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
     return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after creation")
   }
 
+  changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
+
 {{if $Type.HasAudit}}
   if err := RecordAuditEvent(ctx, tx, uuid.NewV4(), time.Now(), uid, euid, "create", "{{$Type.Singular}}", input.ID, fields); err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't create audit record")
@@ -884,6 +894,30 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWrit
     panic(err)
   }
 
+  var result struct {
+    Time time.Time "json:\"time\""
+    Record *{{$Type.Singular}} "json:\"record\""
+    Changed map[string][]interface{} "json:\"changed\""
+  }
+
+  result.Time = time.Now()
+  result.Record = v
+  result.Changed = make(map[string][]interface{})
+
+  for k, l := range changeregistry.ChangesFromRequest(r) {
+    for _, id := range l {
+      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      if err != nil {
+        panic(err)
+      }
+
+      if v != nil {
+        result.Changed[k] = append(result.Changed[k], v)
+        changeregistry.RemoveFromRequest(r, k, id)
+      }
+    }
+  }
+
   if err := tx.Commit(); err != nil {
     panic(err)
   }
@@ -897,7 +931,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWrit
     rw.Header().Set("content-type", "application/msgpack")
     rw.WriteHeader(http.StatusOK)
 
-    if err := msgpack.NewEncoder(rw).Encode(v); err != nil {
+    if err := msgpack.NewEncoder(rw).Encode(result); err != nil {
       panic(err)
     }
   default:
@@ -909,14 +943,19 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWrit
       enc.SetIndent("", "  ")
     }
 
-    if err := enc.Encode(v); err != nil {
+    if err := enc.Encode(result); err != nil {
       panic(err)
     }
   }
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid uuid.UUID) {
-  var input, output struct { Records []{{$Type.Singular}} "json:\"records\"" }
+  var input struct { Records []{{$Type.Singular}} "json:\"records\"" }
+  var output struct {
+    Time time.Time "json:\"time\""
+    Records []{{$Type.Singular}} "json:\"records\""
+    Changed map[string][]interface{} "json:\"changed\""
+  }
 
   switch r.Header.Get("content-type") {
   case "application/msgpack":
@@ -951,6 +990,23 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.Resp
     }
 
     output.Records = append(output.Records, *v)
+  }
+
+  output.Time = time.Now()
+  output.Changed = make(map[string][]interface{})
+
+  for k, l := range changeregistry.ChangesFromRequest(r) {
+    for _, id := range l {
+      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      if err != nil {
+        panic(err)
+      }
+
+      if v != nil {
+        output.Changed[k] = append(output.Changed[k], v)
+        changeregistry.RemoveFromRequest(r, k, id)
+      }
+    }
   }
 
   if err := tx.Commit(); err != nil {
@@ -1014,7 +1070,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 
 {{if $Type.HasUpdatedAt}}
   if !input.UpdatedAt.Equal(p.UpdatedAt) {
-    return nil, errors.Wrap(ErrTimestampMismatch, "{{$Type.Singular}}APISave: UpdatedAt from input did not match current state")
+    return nil, errors.Wrapf(ErrTimestampMismatch, "{{$Type.Singular}}APISave: UpdatedAt from input did not match current state (input=%s current=%s)", input.UpdatedAt, p.UpdatedAt)
   }
 {{end}}
 
@@ -1205,6 +1261,8 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't update record")
   }
 
+  changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
+
 {{if $Type.HasAudit}}
   if err := RecordAuditEvent(ctx, tx, uuid.NewV4(), time.Now(), uid, euid, "update", "{{$Type.Singular}}", input.ID, changed); err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't create audit record")
@@ -1248,6 +1306,30 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter
     panic(err)
   }
 
+  var result struct {
+    Time time.Time "json:\"time\""
+    Record *{{$Type.Singular}} "json:\"record\""
+    Changed map[string][]interface{} "json:\"changed\""
+  }
+
+  result.Time = time.Now()
+  result.Record = v
+  result.Changed = make(map[string][]interface{})
+
+  for k, l := range changeregistry.ChangesFromRequest(r) {
+    for _, id := range l {
+      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      if err != nil {
+        panic(err)
+      }
+
+      if v != nil {
+        result.Changed[k] = append(result.Changed[k], v)
+        changeregistry.RemoveFromRequest(r, k, id)
+      }
+    }
+  }
+
   if err := tx.Commit(); err != nil {
     panic(err)
   }
@@ -1261,7 +1343,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter
     rw.Header().Set("content-type", "application/msgpack")
     rw.WriteHeader(http.StatusOK)
 
-    if err := msgpack.NewEncoder(rw).Encode(v); err != nil {
+    if err := msgpack.NewEncoder(rw).Encode(result); err != nil {
       panic(err)
     }
   default:
@@ -1273,14 +1355,19 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter
       enc.SetIndent("", "  ")
     }
 
-    if err := enc.Encode(v); err != nil {
+    if err := enc.Encode(result); err != nil {
       panic(err)
     }
   }
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid uuid.UUID) {
-  var input, output struct { Records []{{$Type.Singular}} "json:\"records\"" }
+  var input struct { Records []{{$Type.Singular}} "json:\"records\"" }
+  var output struct {
+    Time time.Time "json:\"time\""
+    Records []{{$Type.Singular}} "json:\"records\""
+    Changed map[string][]interface{} "json:\"changed\""
+  }
 
   switch r.Header.Get("content-type") {
   case "application/msgpack":
@@ -1315,6 +1402,23 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.Respon
     }
 
     output.Records = append(output.Records, *v)
+  }
+
+  output.Time = time.Now()
+  output.Changed = make(map[string][]interface{})
+
+  for k, l := range changeregistry.ChangesFromRequest(r) {
+    for _, id := range l {
+      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      if err != nil {
+        panic(err)
+      }
+
+      if v != nil {
+        output.Changed[k] = append(output.Changed[k], v)
+        changeregistry.RemoveFromRequest(r, k, id)
+      }
+    }
   }
 
   if err := tx.Commit(); err != nil {

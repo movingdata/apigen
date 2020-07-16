@@ -347,7 +347,8 @@ export type Action =
   | { type: 'X/{{Hash $Type.LowerPlural "/INVALIDATE_CACHE"}}', payload: {} }
   | { type: 'X/{{Hash $Type.LowerPlural "/RECORD_PUSH"}}', payload: { time: number, record: {{$Type.Singular}} } }
   | { type: 'X/{{Hash $Type.LowerPlural "/RECORD_PUSH_MULTI"}}', payload: { time: number, records: $ReadOnlyArray<{{$Type.Singular}}> } }
-  | { type: 'X/INVALIDATE', payload: { [key: string]: $ReadOnlyArray<string> } };
+  | { type: 'X/INVALIDATE', payload: { {{$Type.Singular}}?: $ReadOnlyArray<string> } }
+  | { type: 'X/RECORD_PUSH_MULTI', payload: { time: string, changed: { {{$Type.Singular}}?: $ReadOnlyArray<{{$Type.Singular}}> } } };
 
 /** {{$Type.LowerPlural}}Search */
 export const {{$Type.LowerPlural}}Search = (params: {{$Type.Singular}}SearchParams) => (
@@ -643,11 +644,18 @@ export const {{$Type.LowerPlural}}Create = (input: {{$Type.Singular}}CreateInput
   });
 
   axios.post('/api/{{$Type.LowerPlural}}', input).then(
-    ({ data: record }: { data: {{$Type.Singular}} }) => {
+    ({ data: { time, record, changed } }: {
+      data: {
+        time: string,
+        record: {{$Type.Singular}},
+        changed: { [key: string]: $ReadOnlyArray<any> },
+      },
+    }) => {
       dispatch({
         type: 'X/{{Hash $Type.LowerPlural "/CREATE_COMPLETE"}}',
         payload: { record, options: options || {} },
       });
+      dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
 
       if (options && options.after) {
         setImmediate(options.after, null, record);
@@ -680,11 +688,18 @@ export const {{$Type.LowerPlural}}CreateMultiple = (input: $ReadOnlyArray<{{$Typ
   });
 
   axios.post('/api/{{$Type.LowerPlural}}/_multi', { records: input }).then(
-    ({ data: { records } }: { data: { records: $ReadOnlyArray<{{$Type.Singular}}> } }) => {
+    ({ data: { time, records, changed } }: {
+      data: {
+        time: string,
+        records: $ReadOnlyArray<{{$Type.Singular}}>,
+        changed: { [key: string]: $ReadOnlyArray<any> },
+      },
+    }) => {
       dispatch({
         type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_COMPLETE"}}',
         payload: { records, options: options || {} },
       });
+      dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
 
       if (options && options.after) {
         setImmediate(options.after, null, records);
@@ -725,11 +740,18 @@ export const {{$Type.LowerPlural}}Update = (input: {{$Type.Singular}}, options?:
       timeout: setTimeout(
         () =>
           void axios.put('/api/{{$Type.LowerPlural}}/' + input.id, input).then(
-            ({ data: record }: { data: {{$Type.Singular}} }) => {
+            ({ data: { time, record, changed } }: {
+              data: {
+                time: string,
+                record: {{$Type.Singular}},
+                changed: { [key: string]: $ReadOnlyArray<any> },
+              },
+            }) => {
               dispatch({
                 type: 'X/{{Hash $Type.LowerPlural "/UPDATE_COMPLETE"}}',
                 payload: { record, options: options || {} },
               });
+              dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
 
               if (options && options.after) {
                 setImmediate(options.after, null, record);
@@ -782,11 +804,18 @@ export const {{$Type.LowerPlural}}UpdateMultiple = (input: $ReadOnlyArray<{{$Typ
       timeout: setTimeout(
         () =>
           void axios.put('/api/{{$Type.LowerPlural}}/_multi', { records: input }).then(
-            ({ data: { records } }: { data: { records: $ReadOnlyArray<{{$Type.Singular}}> } }) => {
+            ({ data: { time, records, changed } }: {
+              data: {
+                time: string,
+                records: $ReadOnlyArray<{{$Type.Singular}}>,
+                changed: { [key: string]: $ReadOnlyArray<any> },
+              },
+            }) => {
               dispatch({
                 type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_COMPLETE"}}',
                 payload: { records, options: options || {} },
               });
+              dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
 
               if (options && options.after) {
                 setImmediate(options.after, null, records);
@@ -1083,7 +1112,7 @@ export default function reducer(state: State = defaultState, action: Action): St
     case 'X/{{Hash $Type.LowerPlural "/RESET"}}':
       return defaultState;
     case 'X/INVALIDATE': {
-      const ids = action.payload["{{$Type.Singular}}"];
+      const ids = action.payload.{{$Type.Singular}};
 
       if (!ids) {
         return state;
@@ -1093,6 +1122,20 @@ export default function reducer(state: State = defaultState, action: Action): St
         ...state,
         fetchCache: invalidateFetchCacheWithIDs(state.fetchCache, ids),
         searchCache: invalidateSearchCacheWithIDs(state.searchCache, ids),
+      };
+    }
+    case 'X/RECORD_PUSH_MULTI': {
+      const { time, changed } = action.payload;
+
+      const records = changed.{{$Type.Singular}};
+      if (!records) {
+        return state;
+      }
+
+      return {
+        ...state,
+        {{$Type.LowerPlural}}: mergeArrays(state.{{$Type.LowerPlural}}, records),
+        fetchCache: updateFetchCachePushMulti(state.fetchCache, records.map(e => e.id), time),
       };
     }
     default:
