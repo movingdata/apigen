@@ -688,6 +688,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
   fields["CreatedAt"] = []interface{}{input.CreatedAt}
 {{- end}}
 {{- end}}
+{{if $Type.HasVersion -}}
+  input.Version = 1
+  ic[{{$Type.Singular}}TableVersion] = sqlbuilder.Bind(input.Version)
+{{- if $Type.HasAudit}}
+  fields["Version"] = []interface{}{input.Version}
+{{- end}}
+{{- end}}
 {{if $Type.HasUpdatedAt -}}
   input.UpdatedAt = now
   ic[{{$Type.Singular}}TableUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
@@ -1068,9 +1075,9 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't fetch previous state")
   }
 
-{{if $Type.HasUpdatedAt}}
-  if !input.UpdatedAt.Equal(p.UpdatedAt) {
-    return nil, errors.Wrapf(ErrTimestampMismatch, "{{$Type.Singular}}APISave: UpdatedAt from input did not match current state (input=%s current=%s)", input.UpdatedAt, p.UpdatedAt)
+{{if $Type.HasVersion}}
+  if input.Version != p.Version {
+    return nil, errors.Wrapf(ErrVersionMismatch, "{{$Type.Singular}}APISave: Version from input did not match current state (input=%d current=%d)", input.Version, p.Version)
   }
 {{end}}
 
@@ -1198,25 +1205,6 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
   changed := make(map[string][]interface{})
 {{- end}}
 
-{{if $Type.HasUpdatedAt -}}
-  input.UpdatedAt = now
-  uc[{{$Type.Singular}}TableUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
-{{- if $Type.HasAudit}}
-  if !Compare(input.UpdatedAt, p.UpdatedAt) {
-    changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
-  }
-{{- end}}
-{{- end}}
-{{if $Type.HasUpdaterID -}}
-  input.UpdaterID = euid
-  uc[{{$Type.Singular}}TableUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
-{{- if $Type.HasAudit}}
-  if !Compare(input.UpdaterID, p.UpdaterID) {
-    changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
-  }
-{{- end}}
-{{- end}}
-
   skip := true
 
 {{range $Field := $Type.Fields}}
@@ -1249,6 +1237,34 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
   if skip {
     return input, nil
   }
+
+{{if $Type.HasVersion -}}
+  input.Version = input.Version + 1
+  uc[{{$Type.Singular}}TableVersion] = sqlbuilder.Bind(input.Version)
+{{- if $Type.HasAudit}}
+  if !Compare(input.Version, p.Version) {
+    changed["Version"] = []interface{}{p.Version, input.Version}
+  }
+{{- end}}
+{{- end}}
+{{if $Type.HasUpdatedAt -}}
+  input.UpdatedAt = now
+  uc[{{$Type.Singular}}TableUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
+{{- if $Type.HasAudit}}
+  if !Compare(input.UpdatedAt, p.UpdatedAt) {
+    changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
+  }
+{{- end}}
+{{- end}}
+{{if $Type.HasUpdaterID -}}
+  input.UpdaterID = euid
+  uc[{{$Type.Singular}}TableUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
+{{- if $Type.HasAudit}}
+  if !Compare(input.UpdaterID, p.UpdaterID) {
+    changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
+  }
+{{- end}}
+{{- end}}
 
   qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(uc).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(input.ID)))
 

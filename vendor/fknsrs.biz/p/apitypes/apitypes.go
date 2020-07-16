@@ -14,6 +14,7 @@ type Model struct {
 	CanCreate      bool
 	CanUpdate      bool
 	CanHide        bool
+	HasVersion     bool
 	HasCreatedAt   bool
 	HasUpdatedAt   bool
 	HasCreatorID   bool

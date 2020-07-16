@@ -152,6 +152,7 @@ var jsTypes = map[string]string{
 }
 
 var ignoreInput = map[string]bool{
+	"version":   true,
 	"createdAt": true,
 	"updatedAt": true,
 	"creatorId": true,
@@ -256,6 +257,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		canCreate      = false
 		canUpdate      = false
 		canHide        = false
+		hasVersion     = false
 		hasCreatedAt   = false
 		hasUpdatedAt   = false
 		hasCreatorID   = false
@@ -292,6 +294,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			sqlName = ucls.String(f.Name())
 		}
 
+		if apiName == "version" {
+			hasVersion = true
+		}
 		if apiName == "createdAt" {
 			hasCreatedAt = true
 			canCreate = true
@@ -713,6 +718,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		CanCreate:      canCreate,
 		CanUpdate:      canUpdate,
 		CanHide:        canHide,
+		HasVersion:     hasVersion,
 		HasCreatedAt:   hasCreatedAt,
 		HasUpdatedAt:   hasUpdatedAt,
 		HasCreatorID:   hasCreatorID,
