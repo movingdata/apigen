@@ -348,7 +348,7 @@ export type Action =
   | { type: 'X/{{Hash $Type.LowerPlural "/RECORD_PUSH"}}', payload: { time: number, record: {{$Type.Singular}} } }
   | { type: 'X/{{Hash $Type.LowerPlural "/RECORD_PUSH_MULTI"}}', payload: { time: number, records: $ReadOnlyArray<{{$Type.Singular}}> } }
   | { type: 'X/INVALIDATE', payload: { {{$Type.Singular}}?: $ReadOnlyArray<string> } }
-  | { type: 'X/RECORD_PUSH_MULTI', payload: { time: string, changed: { {{$Type.Singular}}?: $ReadOnlyArray<{{$Type.Singular}}> } } };
+  | { type: 'X/RECORD_PUSH_MULTI', payload: { time: number, changed: { {{$Type.Singular}}?: $ReadOnlyArray<{{$Type.Singular}}> } } };
 
 /** {{$Type.LowerPlural}}Search */
 export const {{$Type.LowerPlural}}Search = (params: {{$Type.Singular}}SearchParams) => (
@@ -655,7 +655,10 @@ export const {{$Type.LowerPlural}}Create = (input: {{$Type.Singular}}CreateInput
         type: 'X/{{Hash $Type.LowerPlural "/CREATE_COMPLETE"}}',
         payload: { record, options: options || {} },
       });
-      dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
+      dispatch({
+        type: 'X/RECORD_PUSH_MULTI',
+        payload: { time: new Date(time).valueOf(), changed },
+      });
 
       if (options && options.after) {
         setImmediate(options.after, null, record);
@@ -699,7 +702,10 @@ export const {{$Type.LowerPlural}}CreateMultiple = (input: $ReadOnlyArray<{{$Typ
         type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_COMPLETE"}}',
         payload: { records, options: options || {} },
       });
-      dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
+      dispatch({
+        type: 'X/RECORD_PUSH_MULTI',
+        payload: { time: new Date(time).valueOf(), changed },
+      });
 
       if (options && options.after) {
         setImmediate(options.after, null, records);
@@ -751,7 +757,10 @@ export const {{$Type.LowerPlural}}Update = (input: {{$Type.Singular}}, options?:
                 type: 'X/{{Hash $Type.LowerPlural "/UPDATE_COMPLETE"}}',
                 payload: { record, options: options || {} },
               });
-              dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
+              dispatch({
+                type: 'X/RECORD_PUSH_MULTI',
+                payload: { time: new Date(time).valueOf(), changed },
+              });
 
               if (options && options.after) {
                 setImmediate(options.after, null, record);
@@ -815,7 +824,10 @@ export const {{$Type.LowerPlural}}UpdateMultiple = (input: $ReadOnlyArray<{{$Typ
                 type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_COMPLETE"}}',
                 payload: { records, options: options || {} },
               });
-              dispatch({ type: 'X/RECORD_PUSH_MULTI', payload: { time, changed } });
+              dispatch({
+                type: 'X/RECORD_PUSH_MULTI',
+                payload: { time: new Date(time).valueOf(), changed },
+              });
 
               if (options && options.after) {
                 setImmediate(options.after, null, records);
