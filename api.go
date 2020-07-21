@@ -681,18 +681,18 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
 {{- end}}
 {{end}}
 
-{{if $Type.HasCreatedAt -}}
-  input.CreatedAt = now
-  ic[{{$Type.Singular}}TableCreatedAt] = sqlbuilder.Bind(input.CreatedAt)
-{{- if $Type.HasAudit}}
-  fields["CreatedAt"] = []interface{}{input.CreatedAt}
-{{- end}}
-{{- end}}
 {{if $Type.HasVersion -}}
   input.Version = 1
   ic[{{$Type.Singular}}TableVersion] = sqlbuilder.Bind(input.Version)
 {{- if $Type.HasAudit}}
   fields["Version"] = []interface{}{input.Version}
+{{- end}}
+{{- end}}
+{{if $Type.HasCreatedAt -}}
+  input.CreatedAt = now
+  ic[{{$Type.Singular}}TableCreatedAt] = sqlbuilder.Bind(input.CreatedAt)
+{{- if $Type.HasAudit}}
+  fields["CreatedAt"] = []interface{}{input.CreatedAt}
 {{- end}}
 {{- end}}
 {{if $Type.HasUpdatedAt -}}
@@ -850,6 +850,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't perform query")
   }
+
+{{if $Type.HasVersion}}
+  if _, err := tx.ExecContext(ctx, "select pg_notify('model_changes', $1)", fmt.Sprintf("{{$Type.Singular}}/%s/%d", input.ID, input.Version)); err != nil {
+    return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't send postgres notification")
+  }
+{{end}}
 
   v, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
@@ -1276,6 +1282,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't update record")
   }
+
+{{if $Type.HasVersion}}
+  if _, err := tx.ExecContext(ctx, "select pg_notify('model_changes', $1)", fmt.Sprintf("{{$Type.Singular}}/%s/%d", input.ID, input.Version)); err != nil {
+    return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't send postgres notification")
+  }
+{{end}}
 
   changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
 

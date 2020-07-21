@@ -38,7 +38,7 @@ var jsTemplate = template.Must(template.New("jsTemplate").Funcs(tplFunc).Parse(`
 {{$Type := .}}
 
 import axios from 'axios';
-import { useEffect } from 'react';
+import { useContext, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import URLSearchParams from 'url-search-params';
 
@@ -57,6 +57,7 @@ import {
 import type { FetchCache, SearchCache, SearchPageKey } from 'lib/duckHelpers';
 import mergeArrays from 'lib/mergeArrays';
 import { report } from 'lib/report';
+import { Context as SubscriptionsContext } from 'lib/subscriptions';
 
 import { errorsEnsureError } from './errors';
 import type { ErrorResponse } from './errors';
@@ -348,6 +349,9 @@ export type Action =
   | { type: 'X/{{Hash $Type.LowerPlural "/RECORD_PUSH"}}', payload: { time: number, record: {{$Type.Singular}} } }
   | { type: 'X/{{Hash $Type.LowerPlural "/RECORD_PUSH_MULTI"}}', payload: { time: number, records: $ReadOnlyArray<{{$Type.Singular}}> } }
   | { type: 'X/INVALIDATE', payload: { {{$Type.Singular}}?: $ReadOnlyArray<string> } }
+{{if $Type.HasVersion}}
+  | { type: 'X/INVALIDATE_OUTDATED', payload: { {{$Type.Singular}}?: $ReadOnlyArray<[string, number]> } }
+{{end}}
   | { type: 'X/RECORD_PUSH_MULTI', payload: { time: number, changed: { {{$Type.Singular}}?: $ReadOnlyArray<{{$Type.Singular}}> } } };
 
 /** {{$Type.LowerPlural}}Search */
@@ -513,11 +517,25 @@ export const use{{$Type.Singular}}Search = (params: {{$Type.Singular}}SearchPara
 } => {
   const dispatch = useDispatch();
   useEffect(() => void dispatch({{$Type.LowerPlural}}SearchIfRequired(params)));
-  return useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
+  const { meta, loading, records } = useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
     meta: {{$Type.LowerPlural}}GetSearchMeta({{$Type.LowerPlural}}, params),
     loading: {{$Type.LowerPlural}}GetSearchLoading({{$Type.LowerPlural}}, params) || !{{$Type.LowerPlural}}GetSearchMeta({{$Type.LowerPlural}}, params),
     records: {{$Type.LowerPlural}}GetSearchRecords({{$Type.LowerPlural}}, params) || [],
   }));
+
+  const manager = useContext(SubscriptionsContext);
+  const ids = records.map(e => e.id).sort().join(',');
+  useEffect(() => {
+    if (!manager || !ids) { return }
+    ids.split(',').forEach(id => manager.inc('{{$Type.Singular}}', id));
+
+    return () => {
+      if (!manager || !ids) { return }
+      ids.split(',').forEach(id => manager.dec('{{$Type.Singular}}', id));
+    }
+  }, [manager, ids]);
+
+  return { meta, loading, records };
 };
 
 /** pendingFetch is a module-level metadata cache for ongoing fetch operations */ 
@@ -627,10 +645,23 @@ export const use{{$Type.Singular}}Fetch = (id: ?string): {
 } => {
   const dispatch = useDispatch();
   useEffect(() => { if (id) { dispatch({{$Type.LowerPlural}}FetchIfRequired(id)); } });
-  return useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
+  const { loading, record } = useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
     loading: id ? {{$Type.LowerPlural}}GetFetchLoading({{$Type.LowerPlural}}, id) : false,
     record: id ? {{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => e.id === id) : null,
   }));
+
+  const manager = useContext(SubscriptionsContext);
+  useEffect(() => {
+    if (!manager || !id) { return }
+    manager.inc('{{$Type.Singular}}', id);
+
+    return () => {
+      if (!manager || !id) { return }
+      manager.dec('{{$Type.Singular}}', id);
+    }
+  }, [manager, id]);
+
+  return { loading, record };
 };
 
 {{if $Type.CanCreate}}
@@ -1136,6 +1167,30 @@ export default function reducer(state: State = defaultState, action: Action): St
         searchCache: invalidateSearchCacheWithIDs(state.searchCache, ids),
       };
     }
+{{if $Type.HasVersion}}
+    case 'X/INVALIDATE_OUTDATED': {
+      const pairs = action.payload.{{$Type.Singular}};
+
+      if (!pairs) {
+        return state;
+      }
+
+      const ids = pairs.filter(([id, version]) => {
+        const v = state.{{$Type.LowerPlural}}.find(e => e.id === id);
+        return v && v.version < version;
+      }).map(([id]) => id);
+
+      if (ids.length === 0) {
+        return state;
+      }
+
+      return {
+        ...state,
+        fetchCache: invalidateFetchCacheWithIDs(state.fetchCache, ids),
+        searchCache: invalidateSearchCacheWithIDs(state.searchCache, ids),
+      };
+    }
+{{end}}
     case 'X/RECORD_PUSH_MULTI': {
       const { time, changed } = action.payload;
 
