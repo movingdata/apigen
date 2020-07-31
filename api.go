@@ -35,7 +35,7 @@ func (APIWriter) Imports() []string {
 		"movingdata.com/p/wbi/internal/apitypes",
 		"movingdata.com/p/wbi/internal/changeregistry",
 		"movingdata.com/p/wbi/internal/cookiesession",
-		"movingdata.com/p/wbi/internal/trace",
+		"movingdata.com/p/wbi/internal/traceregistry",
 	}
 }
 
@@ -558,7 +558,7 @@ func (m *{{$Type.Singular}}FieldMask) From(a, b *{{$Type.Singular}}) {
   fieldMaskFrom(a, b, m)
 }
 
-func (m *{{$Type.Singular}}FieldMask) Changes(a, b *{{$Type.Singular}}) ([]trace.Change) {
+func (m {{$Type.Singular}}FieldMask) Changes(a, b *{{$Type.Singular}}) ([]traceregistry.Change) {
   return fieldMaskChanges(m, a, b)
 }
 
@@ -717,6 +717,16 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
 {{- end}}
 {{- end}}
 
+  exitActivity := traceregistry.Enter(ctx, &traceregistry.EventModelActivity{
+    ID: uuid.NewV4(),
+    Time: time.Now(),
+    Action: "create",
+    ModelType: "{{$Type.Singular}}",
+    ModelID: input.ID,
+    ModelData: input,
+  })
+  defer func() { exitActivity() }()
+
   b := {{$Type.Singular}}{}
 
   n := 0
@@ -734,17 +744,14 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
       return nil, errors.Errorf("{{$Type.Singular}}APICreate: BeforeSave callback for %s exceeded execution limit of 100 iterations", input.ID)
     }
 
-    if v := ctx.Value(trace.Key); v != nil {
-      if tl, ok := v.(*trace.Log); ok {
-        tl.Add(trace.EntryIteration{
-          ID: uuid.NewV4(),
-          Time: time.Now(),
-          ObjectType: "{{$Type.Singular}}",
-          ObjectID: input.ID,
-          Number: n,
-        })
-      }
-    }
+    exitIteration := traceregistry.Enter(ctx, &traceregistry.EventIteration{
+      ID: uuid.NewV4(),
+      Time: time.Now(),
+      ObjectType: "{{$Type.Singular}}",
+      ObjectID: input.ID,
+      Number: n,
+    })
+    defer func() { exitIteration() }()
 
     for _, e := range mctx.handlers {
       h, ok := e.({{$Type.Singular}}BeforeSaveHandler)
@@ -775,6 +782,18 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
 
       before := time.Now()
 
+      triggerChanges := triggered.Changes(&c, input)
+
+      exitCallback := traceregistry.Enter(ctx, &traceregistry.EventCallback{
+        ID: uuid.NewV4(),
+        Time: before,
+        Name: h.GetQualifiedName(),
+        Skipped: skipped,
+        Forced: forced,
+        Triggered: triggerChanges,
+      })
+      defer func() { exitCallback() }()
+
       a := *input
 
       if !skipped || forced {
@@ -783,23 +802,18 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
         }
       }
 
-      if v := ctx.Value(trace.Key); v != nil {
-        if tl, ok := v.(*trace.Log); ok {
-          mm := {{$Type.Singular}}FieldMaskFrom(&a, input)
+      traceregistry.Add(ctx, traceregistry.EventCallbackComplete{
+        ID: uuid.NewV4(),
+        Time: time.Now(),
+        Name: h.GetQualifiedName(),
+        Duration: time.Now().Sub(before),
+        Changed: {{$Type.Singular}}FieldMaskFrom(&a, input).Changes(&a, input),
+      })
 
-          tl.Add(trace.EntryCallback{
-            ID: uuid.NewV4(),
-            Time: before,
-            Name: h.GetQualifiedName(),
-            Duration: time.Now().Sub(before),
-            Skipped: skipped,
-            Forced: forced,
-            Triggered: triggered.Changes(&c, input),
-            Changed: mm.Changes(&a, input),
-          })
-        }
-      }
+      exitCallback()
     }
+
+    exitIteration()
   }
 
 {{range $Field := $Type.Fields}}
@@ -1106,6 +1120,16 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- end}}
 {{- end}}
 
+  exitActivity := traceregistry.Enter(ctx, &traceregistry.EventModelActivity{
+    ID: uuid.NewV4(),
+    Time: time.Now(),
+    Action: "save",
+    ModelType: "{{$Type.Singular}}",
+    ModelID: input.ID,
+    ModelData: input,
+  })
+  defer func() { exitActivity() }()
+
   b := *p
 
   n := 0
@@ -1137,17 +1161,14 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
       return nil, errors.Errorf("{{$Type.Singular}}APISave: BeforeSave callback for %s exceeded execution limit of 100 iterations", input.ID)
     }
 
-    if v := ctx.Value(trace.Key); v != nil {
-      if tl, ok := v.(*trace.Log); ok {
-        tl.Add(trace.EntryIteration{
-          ID: uuid.NewV4(),
-          Time: time.Now(),
-          ObjectType: "{{$Type.Singular}}",
-          ObjectID: input.ID,
-          Number: n,
-        })
-      }
-    }
+    exitIteration := traceregistry.Enter(ctx, &traceregistry.EventIteration{
+      ID: uuid.NewV4(),
+      Time: time.Now(),
+      ObjectType: "{{$Type.Singular}}",
+      ObjectID: input.ID,
+      Number: n,
+    })
+    defer func() { exitIteration() }()
 
     for _, e := range mctx.handlers {
       h, ok := e.({{$Type.Singular}}BeforeSaveHandler)
@@ -1178,6 +1199,16 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 
       before := time.Now()
 
+      exitCallback := traceregistry.Enter(ctx, &traceregistry.EventCallback{
+        ID: uuid.NewV4(),
+        Time: before,
+        Name: h.GetQualifiedName(),
+        Skipped: skipped,
+        Forced: forced,
+        Triggered: triggered.Changes(&c, input),
+      })
+      defer func() { exitCallback() }()
+
       a := *input
 
       if !skipped || forced {
@@ -1186,23 +1217,18 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
         }
       }
 
-      if v := ctx.Value(trace.Key); v != nil {
-        if tl, ok := v.(*trace.Log); ok {
-          mm := {{$Type.Singular}}FieldMaskFrom(&a, input)
+      traceregistry.Add(ctx, traceregistry.EventCallbackComplete{
+        ID: uuid.NewV4(),
+        Time: time.Now(),
+        Name: h.GetQualifiedName(),
+        Duration: time.Now().Sub(before),
+        Changed: {{$Type.Singular}}FieldMaskFrom(&a, input).Changes(&a, input),
+      })
 
-          tl.Add(trace.EntryCallback{
-            ID: uuid.NewV4(),
-            Time: before,
-            Name: h.GetQualifiedName(),
-            Duration: time.Now().Sub(before),
-            Skipped: skipped,
-            Forced: forced,
-            Triggered: triggered.Changes(&c, input),
-            Changed: mm.Changes(&a, input),
-          })
-        }
-      }
+      exitCallback()
     }
+
+    exitIteration()
   }
 
   uc := sqlbuilder.UpdateColumns{}
