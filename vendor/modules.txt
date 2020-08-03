@@ -1,4 +1,4 @@
-# fknsrs.biz/p/apitypes v1.2.0
+# fknsrs.biz/p/apitypes v1.3.0
 ## explicit
 fknsrs.biz/p/apitypes
 # github.com/danverbraganza/varcaser v0.0.0-20190207223536-e3fb03ee5b4c

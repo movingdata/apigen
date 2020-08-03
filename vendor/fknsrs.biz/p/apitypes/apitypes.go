@@ -29,6 +29,7 @@ type Field struct {
 	IsNull         bool
 	Array          bool
 	APIName        string
+	SQLName        string
 	JSType         string
 	JSONType       map[string]interface{}
 	Filters        []Filter

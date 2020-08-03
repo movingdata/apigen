@@ -1,5 +1,7 @@
 fknsrs.biz/p/apitypes v1.2.0 h1:8qWgZyvD9MFSmGHDmWu6zrPj0Hqrb/aLepjYsTU8ElM=
 fknsrs.biz/p/apitypes v1.2.0/go.mod h1:1GwLI0PJjH7CX/ANtRtrPDwMf23R5VPcMYMtTcL/TW8=
+fknsrs.biz/p/apitypes v1.3.0 h1:HnTb8IwPO5ZR0vg1slFoJYL7Vm5hklic7x13gQH/yyw=
+fknsrs.biz/p/apitypes v1.3.0/go.mod h1:1GwLI0PJjH7CX/ANtRtrPDwMf23R5VPcMYMtTcL/TW8=
 github.com/danverbraganza/varcaser v0.0.0-20190207223536-e3fb03ee5b4c h1:Cr+ys+/EMxJs+UXAzvqzCmHDr9Dg++13M4UwojqBnrQ=
 github.com/danverbraganza/varcaser v0.0.0-20190207223536-e3fb03ee5b4c/go.mod h1:YWV0l74TmlOT2brYeVE8RsriZ3CQ4CsP8z5mqAOg4PQ=
 github.com/grsmv/inflect v0.0.0-20140723132642-a28d3de3b3ad h1:TwIHBCUKHVRVF2qTtjoiwgeR37KuVSn4XoL4/7RW1cU=
