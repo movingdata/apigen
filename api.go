@@ -32,6 +32,7 @@ func (APIWriter) Imports() []string {
 		"github.com/timewasted/go-accept-headers",
 		"gopkg.in/vmihailenco/msgpack.v2",
 		"movingdata.com/p/wbi/internal/apihelpers",
+		"movingdata.com/p/wbi/internal/apifilter",
 		"movingdata.com/p/wbi/internal/apitypes",
 		"movingdata.com/p/wbi/internal/changeregistry",
 		"movingdata.com/p/wbi/internal/cookiesession",
@@ -172,7 +173,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter,
 type {{$Type.Singular}}APIFilterParameters struct {
 {{- range $Field := $Type.Fields}}
 {{- range $Filter := $Field.Filters}}
-  {{$Filter.GoName}} {{$Filter.GoType}} "schema:\"{{$Filter.Name}}\" json:\"{{$Filter.Name}},omitempty\""
+  {{$Filter.GoName}} {{$Filter.GoType}} "schema:\"{{$Filter.Name}}\" json:\"{{$Filter.Name}},omitempty\" api_filter:\"{{$Field.SQLName}},{{$Filter.Operator}}\""
 {{- end}}
 {{- end}}
 {{- range $Filter := $Type.SpecialFilters}}
@@ -189,72 +190,9 @@ func (p *{{$Type.Singular}}APIFilterParameters) AddFilters(q *sqlbuilder.SelectS
     return q
   }
 
-  var a []sqlbuilder.AsExpr
+  a := apifilter.BuildFilters({{$Type.Singular}}Table, p)
 
-{{range $Field := $Type.Fields}}
-{{- range $Filter := $Field.Filters}}
-{{- if eq $Filter.Operator "is_null"}}
-    if !isNil(p.{{$Filter.GoName}}) {
-      if truthy(*p.{{$Filter.GoName}}) {
-        a = append(a, sqlbuilder.IsNull({{$Type.Singular}}Table{{$Field.GoName}}))
-      } else {
-        a = append(a, sqlbuilder.IsNotNull({{$Type.Singular}}Table{{$Field.GoName}}))
-      }
-    }
-{{- else if eq $Filter.Operator "is_not_null"}}
-    if !isNil(p.{{$Filter.GoName}}) {
-      if truthy(*p.{{$Filter.GoName}}) {
-        a = append(a, sqlbuilder.IsNotNull({{$Type.Singular}}Table{{$Field.GoName}}))
-      } else {
-        a = append(a, sqlbuilder.IsNull({{$Type.Singular}}Table{{$Field.GoName}}))
-      }
-    }
-{{- else if eq $Filter.Operator "in"}}
-    if p.{{$Filter.GoName}} != nil {
-      l := make([]sqlbuilder.AsExpr, len(p.{{$Filter.GoName}}))
-      for i := range p.{{$Filter.GoName}} {
-        l[i] = sqlbuilder.Bind(p.{{$Filter.GoName}}[i])
-      }
-
-      if len(l) == 0 {
-        a = append(a, sqlbuilder.Literal("1 = 0"))
-      } else {
-        a = append(a, sqlbuilder.In({{$Type.Singular}}Table{{$Field.GoName}}, l...))
-      }
-    }
-{{- else if eq $Filter.Operator "not_in"}}
-    if p.{{$Filter.GoName}} != nil {
-      l := make([]sqlbuilder.AsExpr, len(p.{{$Filter.GoName}}))
-      for i := range p.{{$Filter.GoName}} {
-        l[i] = sqlbuilder.Bind(p.{{$Filter.GoName}}[i])
-      }
-
-      if len(l) == 0 {
-        a = append(a, sqlbuilder.Literal("1 = 1"))
-      } else {
-        a = append(a, sqlbuilder.NotIn({{$Type.Singular}}Table{{$Field.GoName}}, l...))
-      }
-    }
-{{- else if eq $Filter.Operator "contains"}}
-    if !isNil(p.{{$Filter.GoName}}) {
-      a = append(a, sqlbuilder.BinaryOperator("ilike", {{$Type.Singular}}Table{{$Field.GoName}}, sqlbuilder.Bind("%" + *p.{{$Filter.GoName}} + "%")))
-    }
-{{- else if eq $Filter.Operator "prefix"}}
-    if !isNil(p.{{$Filter.GoName}}) {
-      a = append(a, sqlbuilder.BinaryOperator("ilike", {{$Type.Singular}}Table{{$Field.GoName}}, sqlbuilder.Bind(*p.{{$Filter.GoName}} + "%")))
-    }
-{{- else if or (eq $Filter.Operator "@>") (eq $Filter.Operator "!@>") (eq $Filter.Operator "<@") (eq $Filter.Operator "!<@") (eq $Filter.Operator "&&") (eq $Filter.Operator "!&&")}}
-    if p.{{$Filter.GoName}} != nil {
-      a = append(a, sqlbuilder.BinaryOperator("{{$Filter.Operator}}", {{$Type.Singular}}Table{{$Field.GoName}}, sqlbuilder.Bind(pq.Array(p.{{$Filter.GoName}}))))
-    }
-{{- else}}
-    if !isNil(p.{{$Filter.GoName}}) {
-      a = append(a, sqlbuilder.BinaryOperator("{{$Filter.Operator}}", {{$Type.Singular}}Table{{$Field.GoName}}, sqlbuilder.Bind(*p.{{$Filter.GoName}})))
-    }
-{{- end}}
-{{- end}}
-{{- end}}
-{{- range $Filter := $Type.SpecialFilters}}
+{{range $Filter := $Type.SpecialFilters}}
     if !isNil(p.{{$Filter.GoName}}) {
       a = append(a, {{$Type.Singular}}SpecialFilter{{$Filter.GoName}}(*p.{{$Filter.GoName}}))
     }

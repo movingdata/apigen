@@ -407,6 +407,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		gf := apitypes.Field{
 			GoName:         f.Name(),
 			APIName:        apiName,
+			SQLName:        sqlName,
 			IgnoreInput:    ignoreInput[apiName],
 			NoOrder:        noOrder,
 			OmitEmpty:      omitEmpty,
