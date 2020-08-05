@@ -30,7 +30,7 @@ func (APIWriter) Imports() []string {
 		"github.com/satori/go.uuid",
 		"github.com/shopspring/decimal",
 		"github.com/timewasted/go-accept-headers",
-		"gopkg.in/vmihailenco/msgpack.v2",
+		"github.com/vmihailenco/msgpack/v5",
 		"movingdata.com/p/wbi/internal/apihelpers",
 		"movingdata.com/p/wbi/internal/apifilter",
 		"movingdata.com/p/wbi/internal/apitypes",
