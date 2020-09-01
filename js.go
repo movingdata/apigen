@@ -509,18 +509,22 @@ export const {{$Type.LowerPlural}}GetSearchLoading = (
   return p.loading > 0;
 };
 
+export type {{$Type.Singular}}SearchModifier = (params: {{$Type.Singular}}SearchParams) => {{$Type.Singular}}SearchParams;
+
 /** use{{$Type.Singular}}Search forms a react hook for a specific search query */
-export const use{{$Type.Singular}}Search = (params: {{$Type.Singular}}SearchParams): {
+export const use{{$Type.Singular}}Search = (params: {{$Type.Singular}}SearchParams, ...modifiers: Array<{{$Type.Singular}}SearchModifier>): {
   meta: ?{ time: number, total: number, loading: number },
   loading: boolean,
   records: $ReadOnlyArray<{{$Type.Singular}}>,
 } => {
+  let modified = modifiers.reduce((p, fn) => fn(p), params);
+
   const dispatch = useDispatch();
-  useEffect(() => void dispatch({{$Type.LowerPlural}}SearchIfRequired(params)));
+  useEffect(() => void dispatch({{$Type.LowerPlural}}SearchIfRequired(modified)));
   const { meta, loading, records } = useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
-    meta: {{$Type.LowerPlural}}GetSearchMeta({{$Type.LowerPlural}}, params),
-    loading: {{$Type.LowerPlural}}GetSearchLoading({{$Type.LowerPlural}}, params) || !{{$Type.LowerPlural}}GetSearchMeta({{$Type.LowerPlural}}, params),
-    records: {{$Type.LowerPlural}}GetSearchRecords({{$Type.LowerPlural}}, params) || [],
+    meta: {{$Type.LowerPlural}}GetSearchMeta({{$Type.LowerPlural}}, modified),
+    loading: {{$Type.LowerPlural}}GetSearchLoading({{$Type.LowerPlural}}, modified) || !{{$Type.LowerPlural}}GetSearchMeta({{$Type.LowerPlural}}, modified),
+    records: {{$Type.LowerPlural}}GetSearchRecords({{$Type.LowerPlural}}, modified) || [],
   }));
 
   const manager = useContext(SubscriptionsContext);
