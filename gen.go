@@ -428,14 +428,14 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			jsType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 			jsonType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 		default:
-			return nil, errors.Errorf("unrecognised field type %s", ft.String())
+			return nil, errors.Errorf("unrecognised field type %s (%s)", ft.String(), f.Name())
 		}
 
 		if goType == "" {
-			return nil, errors.Errorf("couldn't determine go type for %s", ft)
+			return nil, errors.Errorf("couldn't determine go type for %s (%s)", ft, f.Name())
 		}
 		if jsType == "" {
-			return nil, errors.Errorf("couldn't determine js type for %s", ft)
+			return nil, errors.Errorf("couldn't determine js type for %s (%s)", ft, f.Name())
 		}
 
 		var jsEnums []string
