@@ -517,7 +517,7 @@ export const use{{$Type.Singular}}Search = (params: {{$Type.Singular}}SearchPara
   loading: boolean,
   records: $ReadOnlyArray<{{$Type.Singular}}>,
 } => {
-  let modified = modifiers.reduce((p, fn) => fn(p), params);
+  const modified = modifiers.reduce((p, fn) => fn(p), params);
 
   const dispatch = useDispatch();
   useEffect(() => void dispatch({{$Type.LowerPlural}}SearchIfRequired(modified)));
