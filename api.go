@@ -225,7 +225,7 @@ func (p *{{$Type.Singular}}APISearchParameters) AddFilters(q *sqlbuilder.SelectS
 }
 
 func (p *{{$Type.Singular}}APISearchParameters) AddLimits(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement {
-  if !isNil(p.Order) {
+  if p.Order != nil {
     var l []sqlbuilder.AsOrderingTerm
     for _, s := range strings.Split(*p.Order, ",") {
       if len(s) < 1 {
@@ -266,9 +266,9 @@ func (p *{{$Type.Singular}}APISearchParameters) AddLimits(q *sqlbuilder.SelectSt
     }
   }
 
-  if !isNil(p.Offset) && !isNil(p.Limit) {
+  if p.Offset != nil && p.Limit != nil {
     q = q.OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Bind(*p.Offset), sqlbuilder.Bind(*p.Limit)))
-  } else if !isNil(p.Limit) {
+  } else if p.Limit != nil {
     q = q.OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Bind(0), sqlbuilder.Bind(*p.Limit)))
   }
 
