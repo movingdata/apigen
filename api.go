@@ -701,10 +701,10 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
       forced := false
 
       if options != nil {
-        if options.SkipCallbacks.Match("{{$Type.Singular}}", h.GetName(), input.ID) {
+        if options.SkipCallbacks.MatchConsume("{{$Type.Singular}}", h.GetName(), input.ID) {
           skipped = true
         }
-        if options.ForceCallbacks.Match("{{$Type.Singular}}", h.GetName(), input.ID) {
+        if options.ForceCallbacks.MatchConsume("{{$Type.Singular}}", h.GetName(), input.ID) {
           forced = true
         }
       }
@@ -1118,10 +1118,10 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
       forced := false
 
       if options != nil {
-        if options.SkipCallbacks.Match("{{$Type.Singular}}", h.GetName(), input.ID) {
+        if options.SkipCallbacks.MatchConsume("{{$Type.Singular}}", h.GetName(), input.ID) {
           skipped = true
         }
-        if options.ForceCallbacks.Match("{{$Type.Singular}}", h.GetName(), input.ID) {
+        if options.ForceCallbacks.MatchConsume("{{$Type.Singular}}", h.GetName(), input.ID) {
           forced = true
         }
       }
