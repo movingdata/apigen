@@ -509,10 +509,12 @@ func {{$Type.Singular}}FieldMaskFrom(a, b *{{$Type.Singular}}) {{$Type.Singular}
 type {{$Type.Singular}}BeforeSaveHandlerFunc func(ctx context.Context, tx *sql.Tx, uid, euid uuid.UUID, options *APIOptions, current, proposed *{{$Type.Singular}}) error
 
 type {{$Type.Singular}}BeforeSaveHandler struct {
-  Trigger *{{$Type.Singular}}FieldMask
   Name string
+  Trigger *{{$Type.Singular}}FieldMask
+  Change *{{$Type.Singular}}FieldMask
+  Read []FieldMask
+  Write []FieldMask
   Func {{$Type.Singular}}BeforeSaveHandlerFunc
-  Output []FieldMask
 }
 
 func (h {{$Type.Singular}}BeforeSaveHandler) GetName() string {
@@ -523,7 +525,7 @@ func (h {{$Type.Singular}}BeforeSaveHandler) GetQualifiedName() string {
   return "{{$Type.Singular}}." + h.GetName()
 }
 
-func (h {{$Type.Singular}}BeforeSaveHandler) GetInputs() []string {
+func (h {{$Type.Singular}}BeforeSaveHandler) GetTriggers() []string {
   if h.Trigger != nil {
     return h.Trigger.Fields()
   }
@@ -531,10 +533,28 @@ func (h {{$Type.Singular}}BeforeSaveHandler) GetInputs() []string {
   return []string{ {{range $Field := $Type.Fields}}"{{$Type.Singular}}.{{$Field.GoName}}",{{end}} }
 }
 
-func (h {{$Type.Singular}}BeforeSaveHandler) GetOutputs() []string {
+func (h {{$Type.Singular}}BeforeSaveHandler) GetChanges() []string {
+  if h.Change != nil {
+    return h.Change.Fields()
+  }
+
+  return []string{ {{range $Field := $Type.Fields}}"{{$Type.Singular}}.{{$Field.GoName}}",{{end}} }
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetReads() []string {
   var a []string
 
-  for _, e := range h.Output {
+  for _, e := range h.Read {
+    a = append(a, e.Fields()...)
+  }
+
+  return a
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetWrites() []string {
+  var a []string
+
+  for _, e := range h.Write {
     a = append(a, e.Fields()...)
   }
 
@@ -547,15 +567,6 @@ func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bo
   }
 
   return h.Trigger.Match(a, b)
-}
-
-func (mctx *ModelContext) {{$Type.Singular}}BeforeSave(trigger *{{$Type.Singular}}FieldMask, name string, fn {{$Type.Singular}}BeforeSaveHandlerFunc, output ...FieldMask) {
-  mctx.handlers = append(mctx.handlers, {{$Type.Singular}}BeforeSaveHandler{
-    Trigger: trigger,
-    Name: name,
-    Func: fn,
-    Output: output,
-  })
 }
 {{end}}
 
