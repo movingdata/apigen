@@ -472,6 +472,10 @@ type {{$Type.Singular}}FieldMask struct {
 {{- end}}
 }
 
+func (m {{$Type.Singular}}FieldMask) ModelName() string {
+  return "{{$Type.Singular}}"
+}
+
 func (m {{$Type.Singular}}FieldMask) Fields() []string {
   return fieldMaskTrueFields("{{$Type.Singular}}", m)
 }
@@ -514,11 +518,17 @@ type {{$Type.Singular}}BeforeSaveHandler struct {
   Change *{{$Type.Singular}}FieldMask
   Read []FieldMask
   Write []FieldMask
+  DeferredRead []FieldMask
+  DeferredWrite []FieldMask
   Func {{$Type.Singular}}BeforeSaveHandlerFunc
 }
 
 func (h {{$Type.Singular}}BeforeSaveHandler) GetName() string {
   return h.Name
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetModelName() string {
+  return "{{$Type.Singular}}"
 }
 
 func (h {{$Type.Singular}}BeforeSaveHandler) GetQualifiedName() string {
@@ -533,12 +543,20 @@ func (h {{$Type.Singular}}BeforeSaveHandler) GetTriggers() []string {
   return []string{ {{range $Field := $Type.Fields}}"{{$Type.Singular}}.{{$Field.GoName}}",{{end}} }
 }
 
+func (h {{$Type.Singular}}BeforeSaveHandler) GetTriggerMask() FieldMask {
+  return h.Trigger
+}
+
 func (h {{$Type.Singular}}BeforeSaveHandler) GetChanges() []string {
   if h.Change != nil {
     return h.Change.Fields()
   }
 
   return []string{ {{range $Field := $Type.Fields}}"{{$Type.Singular}}.{{$Field.GoName}}",{{end}} }
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetChangeMask() FieldMask {
+  return h.Change
 }
 
 func (h {{$Type.Singular}}BeforeSaveHandler) GetReads() []string {
@@ -551,6 +569,10 @@ func (h {{$Type.Singular}}BeforeSaveHandler) GetReads() []string {
   return a
 }
 
+func (h {{$Type.Singular}}BeforeSaveHandler) GetReadMasks() []FieldMask {
+  return h.Read
+}
+
 func (h {{$Type.Singular}}BeforeSaveHandler) GetWrites() []string {
   var a []string
 
@@ -559,6 +581,38 @@ func (h {{$Type.Singular}}BeforeSaveHandler) GetWrites() []string {
   }
 
   return a
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetWriteMasks() []FieldMask {
+  return h.Write
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetDeferredReads() []string {
+  var a []string
+
+  for _, e := range h.DeferredRead {
+    a = append(a, e.Fields()...)
+  }
+
+  return a
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetDeferredReadMasks() []FieldMask {
+  return h.DeferredRead
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetDeferredWrites() []string {
+  var a []string
+
+  for _, e := range h.DeferredWrite {
+    a = append(a, e.Fields()...)
+  }
+
+  return a
+}
+
+func (h {{$Type.Singular}}BeforeSaveHandler) GetDeferredWriteMasks() []FieldMask {
+  return h.DeferredWrite
 }
 
 func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bool {
@@ -591,6 +645,8 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
   if !truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
   }
+
+  ctx, queue := withDeferredCallbackQueue(ctx)
 
   ic := sqlbuilder.InsertColumns{}
 
@@ -833,6 +889,19 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
   }
 {{end}}
 
+  if queue != nil {
+    if err := queue.run(ctx, tx, uid, euid, options); err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't run callback queue")
+    }
+
+    vv, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
+    if err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after running callback queue")
+    }
+
+    v = vv
+  }
+
   return v, nil
 }
 
@@ -1038,6 +1107,8 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
   if !truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
+
+  ctx, queue := withDeferredCallbackQueue(ctx)
 
   p, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
@@ -1271,6 +1342,19 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't create audit record")
   }
 {{end}}
+
+  if queue != nil {
+    if err := queue.run(ctx, tx, uid, euid, options); err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't run callback queue")
+    }
+
+    vv, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
+    if err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't get object after running callback queue")
+    }
+
+    input = vv
+  }
 
   return input, nil
 }
