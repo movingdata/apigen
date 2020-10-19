@@ -890,7 +890,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
 {{end}}
 
   if queue != nil {
-    if err := queue.run(ctx, tx, uid, euid, options); err != nil {
+    if err := queue.run(ctx, tx); err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't run callback queue")
     }
 
@@ -1344,7 +1344,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{end}}
 
   if queue != nil {
-    if err := queue.run(ctx, tx, uid, euid, options); err != nil {
+    if err := queue.run(ctx, tx); err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't run callback queue")
     }
 
