@@ -28,6 +28,7 @@ var (
 	filter      string
 	writers     string
 	verbose     bool
+	disableFormatting bool
 )
 
 func init() {
@@ -39,6 +40,7 @@ func init() {
 	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
 	flag.StringVar(&writers, "writers", "api,sql,js,swagger", "Run only the specified writers.")
 	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
+	flag.BoolVar(&disableFormatting, "disable_formatting", false, "Disable formatting (can help with debugging).")
 }
 
 func logTime(s string, fn func()) {
@@ -105,14 +107,26 @@ func main() {
 
 		var writerList []writer
 
+		if len(writerMap) == 0 || writerMap["accessors"] {
+			writerList = append(writerList, NewAccessorsWriter(goDir))
+		}
 		if len(writerMap) == 0 || writerMap["api"] {
 			writerList = append(writerList, NewAPIWriter(goDir))
 		}
-		if len(writerMap) == 0 || writerMap["sql"] {
-			writerList = append(writerList, NewSQLWriter(goDir))
+		if len(writerMap) == 0 || writerMap["enum"] {
+			writerList = append(writerList, NewEnumWriter(goDir))
+		}
+		if len(writerMap) == 0 || writerMap["interface"] {
+			writerList = append(writerList, NewInterfaceWriter(goDir))
 		}
 		if len(writerMap) == 0 || writerMap["js"] {
 			writerList = append(writerList, NewJSWriter(jsDir))
+		}
+		if len(writerMap) == 0 || writerMap["otto"] {
+			writerList = append(writerList, NewOttoWriter(goDir))
+		}
+		if len(writerMap) == 0 || writerMap["sql"] {
+			writerList = append(writerList, NewSQLWriter(goDir))
 		}
 		if len(writerMap) == 0 || writerMap["swagger"] {
 			writerList = append(writerList, NewSwaggerWriter(swaggerFile))
@@ -190,16 +204,25 @@ func main() {
 			for _, w := range writerList {
 				filename := w.File(typeName, namedType, structType)
 
+				if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+					log.Fatalf("error preparing directory for %s (%s): %s", typeName, w.Name(), err.Error())
+				}
+
 				log.Printf("working on %s (%s)", typeName, filename)
 
 				buf := bytes.NewBuffer(nil)
 
 				if w.Language() == "go" {
+					thisPackageName := packageName
+					if n, ok := w.(hasPackageName); ok {
+						thisPackageName = n.PackageName(typeName, namedType, structType)
+					}
+
 					logTime("executing go header template", func() {
 						if err := headerTemplate.Execute(buf, struct {
 							PackageName string
 							Imports     []string
-						}{packageName, w.Imports()}); err != nil {
+						}{thisPackageName, w.Imports()}); err != nil {
 							log.Fatalf("error writing header for %s (%s): %s", typeName, w.Name(), err.Error())
 						}
 					})
@@ -213,7 +236,7 @@ func main() {
 
 				nice := buf.Bytes()
 
-				if w.Language() == "go" {
+				if w.Language() == "go" && !disableFormatting {
 					logTime("formatting go code", func() {
 						d, err := imports.Process(filename, nice, nil)
 						if err != nil {

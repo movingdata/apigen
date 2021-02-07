@@ -26,6 +26,10 @@ type writer interface {
 	Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error
 }
 
+type hasPackageName interface {
+	PackageName(typeName string, namedType *types.Named, structType *types.Struct) string
+}
+
 type finisher interface {
 	Finish(dry bool) error
 }
@@ -234,6 +238,9 @@ var tplFunc = template.FuncMap{
 		}
 
 		return input
+	},
+	"FirstChar": func(s string) string {
+		return strings.ToLower(string(s[0]))
 	},
 }
 

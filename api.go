@@ -25,13 +25,10 @@ func (APIWriter) Imports() []string {
 		"fknsrs.biz/p/civil",
 		"fknsrs.biz/p/sqlbuilder",
 		"github.com/gorilla/mux",
-		"github.com/gorilla/schema",
 		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
-		"github.com/shopspring/decimal",
 		"github.com/timewasted/go-accept-headers",
 		"github.com/vmihailenco/msgpack/v5",
-		"movingdata.com/p/wbi/internal/apihelpers",
 		"movingdata.com/p/wbi/internal/apifilter",
 		"movingdata.com/p/wbi/internal/apitypes",
 		"movingdata.com/p/wbi/internal/changeregistry",
@@ -83,14 +80,6 @@ func init() {
     v, err := mctx.{{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
     return v, err
   })
-}
-
-func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APIGet(jsctx.ctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APIGet(ctx context.Context, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
@@ -281,14 +270,6 @@ type {{$Type.Singular}}APISearchResponse struct {
   Time time.Time "json:\"time\""
 }
 
-func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular}}APISearchParameters) *{{$Type.Singular}}APISearchResponse {
-  v, err := jsctx.mctx.{{$Type.Singular}}APISearch(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
-}
-
 func (mctx *ModelContext) {{$Type.Singular}}APISearch(ctx context.Context, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular}}Table).Columns(columnsAsExpressions({{$Type.Singular}}Columns)...)
 
@@ -346,14 +327,6 @@ func (mctx *ModelContext) {{$Type.Singular}}APISearch(ctx context.Context, db Qu
     Total: total,
     Time: time.Now(),
   }, nil
-}
-
-func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular}}APIFilterParameters) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APIFind(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APIFind(ctx context.Context, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
@@ -625,22 +598,6 @@ func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bo
 {{end}}
 
 {{if $Type.CanCreate}}
-func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APICreate(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
-}
-
-func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singular}}, options APIOptions) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APICreate(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
-}
-
 func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *APIOptions) (*{{$Type.Singular}}, error) {
   if !truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
@@ -1089,22 +1046,6 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.Resp
 {{end}}
 
 {{if $Type.CanUpdate}}
-func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APISave(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
-}
-
-func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singular}}, options *APIOptions) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APISave(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
-  if err != nil {
-    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
-  }
-  return v
-}
-
 func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *APIOptions) (*{{$Type.Singular}}, error) {
   if !truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
@@ -1539,6 +1480,110 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.Respon
       panic(err)
     }
   }
+}
+{{end}}
+
+{{if $Type.HasCreatedAt}}
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
+  }
+  if !truthy(createdAt) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableCreatedAt: sqlbuilder.Bind(createdAt),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatedAt: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatedAt: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
+
+{{if $Type.HasCreatorID}}
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, tx *sql.Tx, id, creatorID uuid.UUID) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
+  }
+  if !truthy(creatorID) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableCreatorID: sqlbuilder.Bind(creatorID),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatorID: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatorID: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
+
+{{if $Type.HasUpdatedAt}}
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
+  }
+  if !truthy(updatedAt) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableUpdatedAt: sqlbuilder.Bind(updatedAt),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdatedAt: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdatedAt: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
+
+{{if $Type.HasUpdaterID}}
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, tx *sql.Tx, id, updaterID uuid.UUID) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
+  }
+  if !truthy(updaterID) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableUpdaterID: sqlbuilder.Bind(updaterID),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdaterID: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdaterID: couldn't update record")
+  }
+
+  return nil
 }
 {{end}}
 `))
