@@ -1541,4 +1541,132 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.Respon
   }
 }
 {{end}}
+
+{{if $Type.HasCreatedAt}}
+func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id uuid.UUID, createdAt time.Time) {
+  if err := jsctx.mctx.{{$Type.Singular}}APIChangeCreatedAt(jsctx.ctx, jsctx.tx, id, createdAt); err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+}
+
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
+  }
+  if !truthy(createdAt) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableCreatedAt: sqlbuilder.Bind(createdAt),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatedAt: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatedAt: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
+
+{{if $Type.HasCreatorID}}
+func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatorID(id, creatorID uuid.UUID) {
+  if err := jsctx.mctx.{{$Type.Singular}}APIChangeCreatorID(jsctx.ctx, jsctx.tx, id, creatorID); err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+}
+
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, tx *sql.Tx, id, creatorID uuid.UUID) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
+  }
+  if !truthy(creatorID) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableCreatorID: sqlbuilder.Bind(creatorID),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatorID: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatorID: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
+
+{{if $Type.HasUpdatedAt}}
+func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id uuid.UUID, updatedAt time.Time) {
+  if err := jsctx.mctx.{{$Type.Singular}}APIChangeUpdatedAt(jsctx.ctx, jsctx.tx, id, updatedAt); err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+}
+
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
+  }
+  if !truthy(updatedAt) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableUpdatedAt: sqlbuilder.Bind(updatedAt),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdatedAt: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdatedAt: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
+
+{{if $Type.HasUpdaterID}}
+func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdaterID(id, updaterID uuid.UUID) {
+  if err := jsctx.mctx.{{$Type.Singular}}APIChangeUpdaterID(jsctx.ctx, jsctx.tx, id, updaterID); err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+}
+
+func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, tx *sql.Tx, id, updaterID uuid.UUID) error {
+  if !truthy(id) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
+  }
+  if !truthy(updaterID) {
+    return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
+  }
+
+  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular}}TableUpdaterID: sqlbuilder.Bind(updaterID),
+  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdaterID: couldn't generate query")
+  }
+
+  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdaterID: couldn't update record")
+  }
+
+  return nil
+}
+{{end}}
 `))
