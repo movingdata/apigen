@@ -28,6 +28,7 @@ var (
 	filter      string
 	writers     string
 	verbose     bool
+	disableFormatting bool
 )
 
 func init() {
@@ -39,6 +40,7 @@ func init() {
 	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
 	flag.StringVar(&writers, "writers", "api,sql,js,swagger", "Run only the specified writers.")
 	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
+	flag.BoolVar(&disableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
 }
 
 func logTime(s string, fn func()) {
@@ -213,7 +215,7 @@ func main() {
 
 				nice := buf.Bytes()
 
-				if w.Language() == "go" {
+				if w.Language() == "go" && !disableFormatting {
 					logTime("formatting go code", func() {
 						d, err := imports.Process(filename, nice, nil)
 						if err != nil {
