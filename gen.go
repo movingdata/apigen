@@ -239,6 +239,9 @@ var tplFunc = template.FuncMap{
 
 		return input
 	},
+	"LC": func(s string) string {
+		return strings.ToLower(s)
+	},
 }
 
 func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*apitypes.Model, error) {

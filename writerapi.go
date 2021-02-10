@@ -37,6 +37,7 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"movingdata.com/p/wbi/internal/changeregistry",
 		"movingdata.com/p/wbi/internal/cookiesession",
 		"movingdata.com/p/wbi/internal/traceregistry",
+		"movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
 	}
 }
 
@@ -50,33 +51,6 @@ func (w *APIWriter) Write(wr io.Writer, typeName string, namedType *types.Named,
 
 var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse(`
 {{$Type := .}}
-
-{{- range $Field := $Type.Fields}}
-{{- if $Field.Enum}}
-const (
-{{- range $Enum := $Field.Enum}}
-  {{$Type.Singular}}Enum{{$Field.GoName}}{{$Enum.GoName}} = "{{$Enum.Value}}"
-{{- end}}
-)
-
-var (
-  {{$Type.Singular}}Valid{{$Field.GoName}} = map[string]bool{}
-  {{$Type.Singular}}Values{{$Field.GoName}} = []string{}
-  {{$Type.Singular}}Labels{{$Field.GoName}} = map[string]string{
-{{- range $Enum := $Field.Enum}}
-    {{$Type.Singular}}Enum{{$Field.GoName}}{{$Enum.GoName}}: "{{$Enum.Label}}",
-{{- end}}
-  }
-)
-
-func init() {
-  for k := range {{$Type.Singular}}Labels{{$Field.GoName}} {
-    {{$Type.Singular}}Valid{{$Field.GoName}}[k] = true
-    {{$Type.Singular}}Values{{$Field.GoName}} = append({{$Type.Singular}}Values{{$Field.GoName}}, k)
-  }
-}
-{{- end}}
-{{- end}}
 
 func init() {
   registerFinder("{{$Type.Singular}}", func(mctx *ModelContext, ctx context.Context, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
@@ -658,13 +632,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
 {{- if $Field.Enum}}
 {{- if $Field.Array}}
   for i, v := range input.{{$Field.GoName}} {
-    if !{{$Type.Singular}}Valid{{$Field.GoName}}[v] {
-      return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
+      return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
   }
 {{- else}}
-  if !{{$Type.Singular}}Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-    return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+  if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+    return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
   }
 {{- end}}
 {{- end}}
@@ -834,13 +808,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
     {{- if $Field.Enum}}
       {{- if $Field.Array}}
         for i, v := range input.{{$Field.GoName}} {
-          if !{{$Type.Singular}}Valid{{$Field.GoName}}[v] {
-            return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+          if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
+            return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
           }
         }
       {{- else}}
-        if !{{$Type.Singular}}Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-          return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+        if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+          return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
         }
       {{- end}}
     {{- end}}
@@ -1130,13 +1104,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- if $Field.Enum}}
 {{- if $Field.Array}}
   for i, v := range input.{{$Field.GoName}} {
-    if !{{$Type.Singular}}Valid{{$Field.GoName}}[v] {
-      return nil, errors.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
+      return nil, errors.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
   }
 {{- else}}
-  if !{{$Type.Singular}}Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-    return nil, errors.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+  if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+    return nil, errors.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
   }
 {{- end}}
 {{- end}}
@@ -1269,13 +1243,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- if $Field.Enum}}
 {{- if $Field.Array}}
     for i, v := range input.{{$Field.GoName}} {
-      if !{{$Type.Singular}}Valid{{$Field.GoName}}[v] {
-        return nil, errors.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+      if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
+        return nil, errors.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
       }
     }
 {{- else}}
-    if !{{$Type.Singular}}Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-      return nil, errors.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular}}Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+      return nil, errors.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
 {{- end}}
 {{- end}}
