@@ -192,16 +192,25 @@ func main() {
 			for _, w := range writerList {
 				filename := w.File(typeName, namedType, structType)
 
+				if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+					log.Fatalf("error preparing directory for %s (%s): %s", typeName, w.Name(), err.Error())
+				}
+
 				log.Printf("working on %s (%s)", typeName, filename)
 
 				buf := bytes.NewBuffer(nil)
 
 				if w.Language() == "go" {
+					thisPackageName := packageName
+					if n, ok := w.(packageNamer); ok {
+						thisPackageName = n.PackageName(typeName, namedType, structType)
+					}
+
 					logTime("executing go header template", func() {
 						if err := headerTemplate.Execute(buf, struct {
 							PackageName string
 							Imports     []string
-						}{packageName, w.Imports()}); err != nil {
+						}{thisPackageName, w.Imports()}); err != nil {
 							log.Fatalf("error writing header for %s (%s): %s", typeName, w.Name(), err.Error())
 						}
 					})

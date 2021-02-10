@@ -26,6 +26,10 @@ type writer interface {
 	Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error
 }
 
+type packageNamer interface {
+	PackageName(typeName string, namedType *types.Named, structType *types.Struct) string
+}
+
 type finisher interface {
 	Finish(dry bool) error
 }
