@@ -27,6 +27,7 @@ func (SQLWriter) Imports(typeName string, namedType *types.Named, structType *ty
 		"fknsrs.biz/p/sqlbuilder",
 		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
+    "movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
 }
 
@@ -51,6 +52,15 @@ var sqlTypes = map[string]string{
 }
 
 func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
+	d, err := getSQLTemplateData(typeName,namedType,structType)
+	if err != nil {
+		return err
+	}
+
+	return sqlTemplate.Execute(wr, d)
+}
+
+func getSQLTemplateData(typeName string, namedType *types.Named, structType *types.Struct) (*sqlTemplateData, error) {
 	pluralSnake, _ := pluralFor(namedType.Obj().Name())
 	_, singularCamel := singularFor(namedType.Obj().Name())
 
@@ -101,7 +111,7 @@ func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named,
 
 		sqlType, ok := sqlTypes[strings.TrimPrefix(ft.String(), "movingdata.com/p/wbi/vendor/")]
 		if !ok {
-			return errors.Errorf("can't determine sql type for go type %q", ft)
+			return nil,errors.Errorf("can't determine sql type for go type %q", ft)
 		}
 
 		if a, ok := sqlArgs["table"]; ok && len(a) > 0 {
@@ -154,7 +164,7 @@ func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named,
 		}
 	}
 
-	return sqlTemplate.Execute(wr, sqlTemplateData{
+	return &sqlTemplateData{
 		Name:            namedType.Obj().Name(),
 		TableName:       tableName,
 		PluralSnake:     pluralSnake,
@@ -173,7 +183,7 @@ func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named,
 		HasFindOne:      hasFindOne,
 		HasFindOneByID:  hasFindOneByID,
 		HasSave:         hasSave,
-	})
+	}, nil
 }
 
 type sqlTemplateData struct {
@@ -205,53 +215,13 @@ type sqlField struct {
 	Pointer bool
 }
 
-var sqlTemplate = template.Must(template.New("sqlTemplate").Parse(`
+var sqlTemplate = template.Must(template.New("sqlTemplate").Funcs(tplFunc).Parse(`
 {{$Root := .}}
-
-// {{$Root.Name}}Table is a symbolic identifier for the "{{$Root.TableName}}" table
-var {{$Root.Name}}Table = sqlbuilder.NewTable(
-	"{{$Root.TableName}}",
-{{- range $Field := $Root.Fields}}
-	"{{$Field.SQLName}}",
-{{- end}}
-)
-
-var {{$Root.Name}}Schema = apitypes.Table{
-	Name: "{{$Root.TableName}}",
-	Fields: []apitypes.TableField{
-{{- range $Field := $Root.Fields}}
-		apitypes.TableField{
-			Name: "{{$Field.SQLName}}",
-			Type: "{{$Field.SQLType}}",
-			Array: {{if $Field.Array}}true{{else}}false{{end}},
-			NotNull: {{if $Field.Pointer}}false{{else}}true{{end}},
-		},
-{{- end}}
-	},
-}
-
-func init() {
-	registerSQLSchema({{$Root.Name}}Schema)
-}
-
-var (
-{{- range $Field := $Root.Fields}}
-	// {{$Root.Name}}Table{{$Field.GoName}} is a symbolic identifier for the "{{$Root.TableName}}"."{{$Field.SQLName}}" column
-	{{$Root.Name}}Table{{$Field.GoName}} = {{$Root.Name}}Table.C("{{$Field.SQLName}}")
-{{- end}}
-)
-
-// {{$Root.Name}}Columns is a list of columns in the "{{$Root.TableName}}" table
-var {{$Root.Name}}Columns = []*sqlbuilder.BasicColumn{
-{{- range $Field := $Root.Fields}}
-	{{$Root.Name}}Table{{$Field.GoName}},
-{{- end}}
-}
 
 {{if $Root.HasFindOne}}
 // {{$Root.Name}}SQLFindOne gets a single {{$Root.Name}} record from the database according to a query
 func {{$Root.Name}}SQLFindOne(ctx context.Context, db RowQueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) (*{{$Root.Name}}, error) {
-	qb := sqlbuilder.Select().From({{$Root.Name}}Table).Columns(columnsAsExpressions({{$Root.Name}}Columns)...).OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Literal("0"), sqlbuilder.Literal("1")))
+	qb := sqlbuilder.Select().From({{$Root.Name | LC}}schema.Table).Columns(columnsAsExpressions({{$Root.Name | LC}}schema.Columns)...).OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Literal("0"), sqlbuilder.Literal("1")))
 
 	if fn != nil {
 		qb = fn(qb)
@@ -282,7 +252,7 @@ func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db RowQueryerContext, id 
 		return nil, errors.Errorf("{{$Root.Name}}SQLFindOneByID: id argument was empty")
 	}
 
-	v, err := {{$Root.Name}}SQLFindOne(ctx, db, func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement { return q.AndWhere(sqlbuilder.Eq({{$Root.Name}}TableID, sqlbuilder.Bind(id))) })
+	v, err := {{$Root.Name}}SQLFindOne(ctx, db, func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement { return q.AndWhere(sqlbuilder.Eq({{$Root.Name | LC}}schema.ColumnID, sqlbuilder.Bind(id))) })
 	if err != nil {
 		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindOneByID: couldn't get model")
 	}
@@ -294,7 +264,7 @@ func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db RowQueryerContext, id 
 {{if $Root.HasFindMultiple}}
 // {{$Root.Name}}SQLFindMultiple gets multiple {{$Root.Name}} records from the database according to a query
 func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db QueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) ([]{{$Root.Name}}, error) {
-	qb := sqlbuilder.Select().From({{$Root.Name}}Table).Columns(columnsAsExpressions({{$Root.Name}}Columns)...)
+	qb := sqlbuilder.Select().From({{$Root.Name | LC}}schema.Table).Columns(columnsAsExpressions({{$Root.Name | LC}}schema.Columns)...)
 
 	if fn != nil {
 		qb = fn(qb)
@@ -336,22 +306,22 @@ func {{$Root.Name}}SQLCreate(ctx context.Context, db ExecerContext, userID uuid.
 		return errors.Errorf("{{$Root.Name}}SQLCreate: ID field was empty")
 	}
 
-	qb := sqlbuilder.Insert().Table({{$Root.Name}}Table).Columns(sqlbuilder.InsertColumns{
-		{{$Root.Name}}TableID: sqlbuilder.Bind(m.ID),
+	qb := sqlbuilder.Insert().Table({{$Root.Name | LC}}schema.Table).Columns(sqlbuilder.InsertColumns{
+		{{$Root.Name | LC}}schema.ColumnID: sqlbuilder.Bind(m.ID),
 {{if $Root.HasCreatedAt -}}
-		{{$Root.Name}}TableCreatedAt: sqlbuilder.Bind(now),
+		{{$Root.Name | LC}}schema.ColumnCreatedAt: sqlbuilder.Bind(now),
 {{- end}}
 {{if $Root.HasCreatorID -}}
-		{{$Root.Name}}TableCreatorID: sqlbuilder.Bind(userID),
+		{{$Root.Name | LC}}schema.ColumnCreatorID: sqlbuilder.Bind(userID),
 {{- end}}
 {{if $Root.HasUpdatedAt -}}
-		{{$Root.Name}}TableUpdatedAt: sqlbuilder.Bind(now),
+		{{$Root.Name | LC}}schema.ColumnUpdatedAt: sqlbuilder.Bind(now),
 {{- end}}
 {{if $Root.HasUpdaterID -}}
-		{{$Root.Name}}TableUpdaterID: sqlbuilder.Bind(userID),
+		{{$Root.Name | LC}}schema.ColumnUpdaterID: sqlbuilder.Bind(userID),
 {{- end}}
 {{- range $Field := $Root.CreateFields}}
-		{{$Root.Name}}Table{{$Field.GoName}}: sqlbuilder.Bind({{if $Field.Array}}pq.Array(m.{{$Field.GoName}}){{else}}m.{{$Field.GoName}}{{end}}),
+		{{$Root.Name | LC}}schema.Column{{$Field.GoName}}: sqlbuilder.Bind({{if $Field.Array}}pq.Array(m.{{$Field.GoName}}){{else}}m.{{$Field.GoName}}{{end}}),
 {{- end}}
 	})
 
@@ -389,20 +359,20 @@ func {{$Root.Name}}SQLSave(ctx context.Context, db interface { RowQueryerContext
 
 	uc := sqlbuilder.UpdateColumns{
 {{if $Root.HasUpdatedAt -}}
-		{{$Root.Name}}TableUpdatedAt: sqlbuilder.Bind(m.UpdatedAt),
+		{{$Root.Name | LC}}schema.ColumnUpdatedAt: sqlbuilder.Bind(m.UpdatedAt),
 {{- end}}
 {{if $Root.HasUpdaterID -}}
-		{{$Root.Name}}TableUpdaterID: sqlbuilder.Bind(m.UpdaterID),
+		{{$Root.Name | LC}}schema.ColumnUpdaterID: sqlbuilder.Bind(m.UpdaterID),
 {{- end}}
 	}
 
 {{- range $Field := $Root.UpdateFields}}
 	if !Compare(m.{{$Field.GoName}}, p.{{$Field.GoName}}) {
-		uc[{{$Root.Name}}Table{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(m.{{$Field.GoName}}){{else}}m.{{$Field.GoName}}{{end}})
+		uc[{{$Root.Name | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(m.{{$Field.GoName}}){{else}}m.{{$Field.GoName}}{{end}})
 	}
 {{- end}}
 
-	qb := sqlbuilder.Update().Table({{$Root.Name}}Table).Set(uc).Where(sqlbuilder.Eq({{$Root.Name}}TableID, sqlbuilder.Bind(m.ID)))
+	qb := sqlbuilder.Update().Table({{$Root.Name | LC}}schema.Table).Set(uc).Where(sqlbuilder.Eq({{$Root.Name | LC}}schema.ColumnID, sqlbuilder.Bind(m.ID)))
 
 	qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
 	if err != nil {

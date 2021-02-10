@@ -38,7 +38,7 @@ func init() {
 	flag.StringVar(&swaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
 	flag.BoolVar(&dry, "dry", false, "Dry run (don't write files).")
 	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
-	flag.StringVar(&writers, "writers", "api,enum,sql,js,swagger", "Run only the specified writers.")
+	flag.StringVar(&writers, "writers", "api,enum,schema,sql,js,swagger", "Run only the specified writers.")
 	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
 	flag.BoolVar(&disableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
 }
@@ -112,6 +112,9 @@ func main() {
 		}
 		if len(writerMap) == 0 || writerMap["enum"] {
 			writerList = append(writerList, NewEnumWriter(goDir))
+		}
+		if len(writerMap) == 0 || writerMap["schema"] {
+			writerList = append(writerList, NewSchemaWriter(goDir))
 		}
 		if len(writerMap) == 0 || writerMap["sql"] {
 			writerList = append(writerList, NewSQLWriter(goDir))

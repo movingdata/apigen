@@ -38,6 +38,7 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"movingdata.com/p/wbi/internal/cookiesession",
 		"movingdata.com/p/wbi/internal/traceregistry",
 		"movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
+    "movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
 }
 
@@ -68,13 +69,13 @@ func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} 
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APIGet(ctx context.Context, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
-  qb := sqlbuilder.Select().From({{$Type.Singular}}Table).Columns(columnsAsExpressions({{$Type.Singular}}Columns)...)
+  qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(columnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
   qb = {{$Type.Singular}}UserFilter(qb, euid)
 {{- end}}
 
-  qb = qb.AndWhere(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+  qb = qb.AndWhere(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -164,7 +165,7 @@ func (p *{{$Type.Singular}}APIFilterParameters) AddFilters(q *sqlbuilder.SelectS
     return q
   }
 
-  a := apifilter.BuildFilters({{$Type.Singular}}Table, p)
+  a := apifilter.BuildFilters({{$Type.Singular | LC}}schema.Table, p)
 
 {{range $Filter := $Type.SpecialFilters}}
     if !isNil(p.{{$Filter.GoName}}) {
@@ -217,7 +218,7 @@ func (p *{{$Type.Singular}}APISearchParameters) AddLimits(q *sqlbuilder.SelectSt
 {{- range $Field := $Type.Fields}}
 {{- if not $Field.NoOrder}}
       case "{{$Field.APIName}}":
-        fld = {{$Type.Singular}}Table{{$Field.GoName}}
+        fld = {{$Type.Singular | LC}}schema.Column{{$Field.GoName}}
 {{- end}}
 {{- end}}
 {{- range $Field := $Type.SpecialOrders}}
@@ -264,7 +265,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular}}APISearchPa
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APISearch(ctx context.Context, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
-  qb := sqlbuilder.Select().From({{$Type.Singular}}Table).Columns(columnsAsExpressions({{$Type.Singular}}Columns)...)
+  qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(columnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
   qb = {{$Type.Singular}}UserFilter(qb, euid)
@@ -331,7 +332,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular}}APIFilterPara
 }
 
 func (mctx *ModelContext) {{$Type.Singular}}APIFind(ctx context.Context, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
-  qb := sqlbuilder.Select().From({{$Type.Singular}}Table).Columns(columnsAsExpressions({{$Type.Singular}}Columns)...)
+  qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(columnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
   qb = {{$Type.Singular}}UserFilter(qb, euid)
@@ -664,35 +665,35 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
 
 {{if $Type.HasVersion -}}
   input.Version = 1
-  ic[{{$Type.Singular}}TableVersion] = sqlbuilder.Bind(input.Version)
+  ic[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
 {{- if $Type.HasAudit}}
   fields["Version"] = []interface{}{input.Version}
 {{- end}}
 {{- end}}
 {{if $Type.HasCreatedAt -}}
   input.CreatedAt = now
-  ic[{{$Type.Singular}}TableCreatedAt] = sqlbuilder.Bind(input.CreatedAt)
+  ic[{{$Type.Singular | LC}}schema.ColumnCreatedAt] = sqlbuilder.Bind(input.CreatedAt)
 {{- if $Type.HasAudit}}
   fields["CreatedAt"] = []interface{}{input.CreatedAt}
 {{- end}}
 {{- end}}
 {{if $Type.HasUpdatedAt -}}
   input.UpdatedAt = now
-  ic[{{$Type.Singular}}TableUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
+  ic[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
 {{- if $Type.HasAudit}}
   fields["UpdatedAt"] = []interface{}{input.UpdatedAt}
 {{- end}}
 {{- end}}
 {{if $Type.HasCreatorID -}}
   input.CreatorID = euid
-  ic[{{$Type.Singular}}TableCreatorID] = sqlbuilder.Bind(input.CreatorID)
+  ic[{{$Type.Singular | LC}}schema.ColumnCreatorID] = sqlbuilder.Bind(input.CreatorID)
 {{- if $Type.HasAudit}}
   fields["CreatorID"] = []interface{}{input.CreatorID}
 {{- end}}
 {{- end}}
 {{if $Type.HasUpdaterID -}}
   input.UpdaterID = euid
-  ic[{{$Type.Singular}}TableUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
+  ic[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
 {{- if $Type.HasAudit}}
   fields["UpdaterID"] = []interface{}{input.UpdaterID}
 {{- end}}
@@ -819,7 +820,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
       {{- end}}
     {{- end}}
 
-    ic[{{$Type.Singular}}Table{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
+    ic[{{$Type.Singular | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
 
     {{- if $Type.HasAudit}}
       fields["{{$Field.GoName}}"] = []interface{}{input.{{$Field.GoName}}}
@@ -831,11 +832,11 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
       var empty{{$Field.GoName}} {{$Field.GoType}}
     {{- end}}
 
-    ic[{{$Type.Singular}}Table{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(empty{{$Field.GoName}}){{else}}empty{{$Field.GoName}}{{end}})
+    ic[{{$Type.Singular | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(empty{{$Field.GoName}}){{else}}empty{{$Field.GoName}}{{end}})
   {{- end}}
 {{- end}}
 
-  qb := sqlbuilder.Insert().Table({{$Type.Singular}}Table).Columns(ic)
+  qb := sqlbuilder.Insert().Table({{$Type.Singular | LC}}schema.Table).Columns(ic)
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1254,7 +1255,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- end}}
 {{- end}}
 
-    uc[{{$Type.Singular}}Table{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
+    uc[{{$Type.Singular | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
 {{- if $Type.HasAudit}}
     changed["{{$Field.GoName}}"] = []interface{}{p.{{$Field.GoName}}, input.{{$Field.GoName}}}
 {{- end}}
@@ -1268,7 +1269,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 
 {{if $Type.HasVersion -}}
   input.Version = input.Version + 1
-  uc[{{$Type.Singular}}TableVersion] = sqlbuilder.Bind(input.Version)
+  uc[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
 {{- if $Type.HasAudit}}
   if !Compare(input.Version, p.Version) {
     changed["Version"] = []interface{}{p.Version, input.Version}
@@ -1277,7 +1278,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- end}}
 {{if $Type.HasUpdatedAt -}}
   input.UpdatedAt = now
-  uc[{{$Type.Singular}}TableUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
+  uc[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
 {{- if $Type.HasAudit}}
   if !Compare(input.UpdatedAt, p.UpdatedAt) {
     changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
@@ -1286,7 +1287,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- end}}
 {{if $Type.HasUpdaterID -}}
   input.UpdaterID = euid
-  uc[{{$Type.Singular}}TableUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
+  uc[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
 {{- if $Type.HasAudit}}
   if !Compare(input.UpdaterID, p.UpdaterID) {
     changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
@@ -1294,7 +1295,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
 {{- end}}
 {{- end}}
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(uc).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(input.ID)))
+  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(uc).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(input.ID)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1531,9 +1532,9 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatedAt(ctx context.Conte
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular}}TableCreatedAt: sqlbuilder.Bind(createdAt),
-  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular | LC}}schema.ColumnCreatedAt: sqlbuilder.Bind(createdAt),
+  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1563,9 +1564,9 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatorID(ctx context.Conte
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular}}TableCreatorID: sqlbuilder.Bind(creatorID),
-  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular | LC}}schema.ColumnCreatorID: sqlbuilder.Bind(creatorID),
+  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1595,9 +1596,9 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Conte
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular}}TableUpdatedAt: sqlbuilder.Bind(updatedAt),
-  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular | LC}}schema.ColumnUpdatedAt: sqlbuilder.Bind(updatedAt),
+  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1627,9 +1628,9 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdaterID(ctx context.Conte
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular}}Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular}}TableUpdaterID: sqlbuilder.Bind(updaterID),
-  }).Where(sqlbuilder.Eq({{$Type.Singular}}TableID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
+    {{$Type.Singular | LC}}schema.ColumnUpdaterID: sqlbuilder.Bind(updaterID),
+  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
