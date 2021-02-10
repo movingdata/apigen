@@ -28,7 +28,7 @@ func (w SwaggerWriter) File(typeName string, namedType *types.Named, structType 
 	return w.file
 }
 
-func (SwaggerWriter) Imports() []string {
+func (SwaggerWriter) Imports(typeName string, namedType *types.Named, structType *types.Struct) []string {
 	return []string{}
 }
 

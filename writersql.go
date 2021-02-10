@@ -19,7 +19,7 @@ func (w SQLWriter) File(typeName string, _ *types.Named, _ *types.Struct) string
 	return w.Dir + "/" + strings.ToLower(typeName) + "_sql.go"
 }
 
-func (SQLWriter) Imports() []string {
+func (SQLWriter) Imports(typeName string, namedType *types.Named, structType *types.Struct) []string {
 	return []string{
 		"context",
 		"database/sql",

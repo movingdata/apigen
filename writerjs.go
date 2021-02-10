@@ -20,7 +20,7 @@ func (w JSWriter) File(typeName string, namedType *types.Named, structType *type
 	return w.Dir + "/" + model.LowerPlural + ".js"
 }
 
-func (JSWriter) Imports() []string {
+func (JSWriter) Imports(typeName string, namedType *types.Named, structType *types.Struct) []string {
 	return []string{}
 }
 

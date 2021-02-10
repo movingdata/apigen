@@ -210,7 +210,7 @@ func main() {
 						if err := headerTemplate.Execute(buf, struct {
 							PackageName string
 							Imports     []string
-						}{thisPackageName, w.Imports()}); err != nil {
+						}{thisPackageName, w.Imports(typeName, namedType, structType)}); err != nil {
 							log.Fatalf("error writing header for %s (%s): %s", typeName, w.Name(), err.Error())
 						}
 					})

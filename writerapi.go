@@ -17,7 +17,7 @@ func (w APIWriter) File(typeName string, _ *types.Named, _ *types.Struct) string
 	return w.Dir + "/" + strings.ToLower(typeName) + "_api.go"
 }
 
-func (APIWriter) Imports() []string {
+func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []string {
 	return []string{
 		"encoding/csv",
 		"encoding/json",

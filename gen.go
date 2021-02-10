@@ -22,7 +22,7 @@ type writer interface {
 	Name() string
 	Language() string
 	File(typeName string, namedType *types.Named, structType *types.Struct) string
-	Imports() []string
+	Imports(typeName string, namedType *types.Named, structType *types.Struct) []string
 	Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error
 }
 
