@@ -7,14 +7,14 @@ import (
 	"text/template"
 )
 
-type APIWriter struct{ Dir string }
+type APIWriter struct{ dir string }
 
-func NewAPIWriter(dir string) *APIWriter { return &APIWriter{Dir: dir} }
+func NewAPIWriter(dir string) *APIWriter { return &APIWriter{dir: dir} }
 
 func (APIWriter) Name() string     { return "api" }
 func (APIWriter) Language() string { return "go" }
 func (w APIWriter) File(typeName string, _ *types.Named, _ *types.Struct) string {
-	return w.Dir + "/" + strings.ToLower(typeName) + "_api.go"
+	return w.dir + "/" + strings.ToLower(typeName) + "_api.go"
 }
 
 func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []string {
@@ -54,21 +54,21 @@ var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse
 {{$Type := .}}
 
 func init() {
-  registerFinder("{{$Type.Singular}}", func(mctx *ModelContext, ctx context.Context, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
-    v, err := mctx.{{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
+  registerFinder("{{$Type.Singular}}", func(ctx context.Context, mctx *ModelContext, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
+    v, err := {{$Type.Singular}}APIGet(ctx, mctx, db, id, uid, euid)
     return v, err
   })
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APIGet(jsctx.ctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
+  v, err := {{$Type.Singular}}APIGet(jsctx.ctx, jsctx.mctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIGet(ctx context.Context, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APIGet(ctx context.Context, mctx *ModelContext, db RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(columnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -100,7 +100,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIGet(ctx context.Context, db RowQu
   return &v, nil
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid *uuid.UUID) {
+func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   vars := mux.Vars(r)
 
   id, err := uuid.FromString(vars["id"])
@@ -108,7 +108,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter,
     panic(err)
   }
 
-  v, err := mctx.{{$Type.Singular}}APIGet(r.Context(), db, id, uid, euid)
+  v, err := {{$Type.Singular}}APIGet(r.Context(), mctx, db, id, uid, euid)
   if err != nil {
     panic(err)
   }
@@ -257,14 +257,14 @@ type {{$Type.Singular}}APISearchResponse struct {
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular}}APISearchParameters) *{{$Type.Singular}}APISearchResponse {
-  v, err := jsctx.mctx.{{$Type.Singular}}APISearch(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
+  v, err := {{$Type.Singular}}APISearch(jsctx.ctx, jsctx.mctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APISearch(ctx context.Context, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
+func {{$Type.Singular}}APISearch(ctx context.Context, mctx *ModelContext, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(columnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -324,14 +324,14 @@ func (mctx *ModelContext) {{$Type.Singular}}APISearch(ctx context.Context, db Qu
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular}}APIFilterParameters) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APIFind(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
+  v, err := {{$Type.Singular}}APIFind(jsctx.ctx, jsctx.mctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIFind(ctx context.Context, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APIFind(ctx context.Context, mctx *ModelContext, db QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(columnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -372,13 +372,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APIFind(ctx context.Context, db Quer
   return &m, nil
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid *uuid.UUID) {
+func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   var p {{$Type.Singular}}APISearchParameters
   if err := decodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
   }
 
-  v, err := mctx.{{$Type.Singular}}APISearch(r.Context(), db, &p, uid, euid)
+  v, err := {{$Type.Singular}}APISearch(r.Context(), mctx, db, &p, uid, euid)
   if err != nil {
     panic(err)
   }
@@ -410,13 +410,13 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSearch(rw http.ResponseWrit
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid *uuid.UUID) {
+func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   var p {{$Type.Singular}}APISearchParameters
   if err := decodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
   }
 
-  v, err := mctx.{{$Type.Singular}}APISearch(r.Context(), db, &p, uid, euid)
+  v, err := {{$Type.Singular}}APISearch(r.Context(), mctx, db, &p, uid, euid)
   if err != nil {
     panic(err)
   }
@@ -601,7 +601,7 @@ func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bo
 
 {{if $Type.CanCreate}}
 func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APICreate(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
+  v, err := {{$Type.Singular}}APICreate(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -609,14 +609,14 @@ func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$T
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singular}}, options APIOptions) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APICreate(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
+  v, err := {{$Type.Singular}}APICreate(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *APIOptions) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *APIOptions) (*{{$Type.Singular}}, error) {
   if !truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
   }
@@ -853,7 +853,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
   }
 {{end}}
 
-  v, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
+  v, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
   if err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after creation")
   }
@@ -871,7 +871,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
       return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't run callback queue")
     }
 
-    vv, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
+    vv, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
     if err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after running callback queue")
     }
@@ -882,7 +882,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APICreate(ctx context.Context, tx *s
   return v, nil
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input {{$Type.Singular}}
 
   switch r.Header.Get("content-type") {
@@ -911,7 +911,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWrit
     panic(err)
   }
 
-  v, err := mctx.{{$Type.Singular}}APICreate(r.Context(), tx, uid, euid, time.Now(), &input, options)
+  v, err := {{$Type.Singular}}APICreate(r.Context(), mctx, tx, uid, euid, time.Now(), &input, options)
   if err != nil {
     panic(err)
   }
@@ -928,7 +928,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWrit
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -971,7 +971,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreate(rw http.ResponseWrit
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input struct { Records []{{$Type.Singular}} "json:\"records\"" }
   var output struct {
     Time time.Time "json:\"time\""
@@ -1006,7 +1006,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.Resp
   }
 
   for i := range input.Records {
-    v, err := mctx.{{$Type.Singular}}APICreate(r.Context(), tx, uid, euid, time.Now(), &input.Records[i], options)
+    v, err := {{$Type.Singular}}APICreate(r.Context(), mctx, tx, uid, euid, time.Now(), &input.Records[i], options)
     if err != nil {
       panic(err)
     }
@@ -1019,7 +1019,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.Resp
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1065,7 +1065,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleCreateMultiple(rw http.Resp
 
 {{if $Type.CanUpdate}}
 func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APISave(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
+  v, err := {{$Type.Singular}}APISave(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -1073,21 +1073,21 @@ func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Ty
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singular}}, options *APIOptions) *{{$Type.Singular}} {
-  v, err := jsctx.mctx.{{$Type.Singular}}APISave(jsctx.ctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
+  v, err := {{$Type.Singular}}APISave(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *APIOptions) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *APIOptions) (*{{$Type.Singular}}, error) {
   if !truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
 
   ctx, queue := withDeferredCallbackQueue(ctx)
 
-  p, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
+  p, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
   if err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't fetch previous state")
   }
@@ -1325,7 +1325,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't run callback queue")
     }
 
-    vv, err := mctx.{{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
+    vv, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
     if err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't get object after running callback queue")
     }
@@ -1336,7 +1336,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APISave(ctx context.Context, tx *sql
   return input, nil
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input {{$Type.Singular}}
 
   switch r.Header.Get("content-type") {
@@ -1365,7 +1365,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter
     panic(err)
   }
 
-  v, err := mctx.{{$Type.Singular}}APISave(r.Context(), tx, uid, euid, time.Now(), &input, options)
+  v, err := {{$Type.Singular}}APISave(r.Context(), mctx, tx, uid, euid, time.Now(), &input, options)
   if err != nil {
     panic(err)
   }
@@ -1382,7 +1382,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1425,7 +1425,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Request, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input struct { Records []{{$Type.Singular}} "json:\"records\"" }
   var output struct {
     Time time.Time "json:\"time\""
@@ -1460,7 +1460,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.Respon
   }
 
   for i := range input.Records {
-    v, err := mctx.{{$Type.Singular}}APISave(r.Context(), tx, uid, euid, time.Now(), &input.Records[i], options)
+    v, err := {{$Type.Singular}}APISave(r.Context(), mctx, tx, uid, euid, time.Now(), &input.Records[i], options)
     if err != nil {
       panic(err)
     }
@@ -1473,7 +1473,7 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.Respon
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(k, mctx, r.Context(), tx, id, &uid, &euid)
+      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1519,12 +1519,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APIHandleSaveMultiple(rw http.Respon
 
 {{if $Type.HasCreatedAt}}
 func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id uuid.UUID, createdAt time.Time) {
-  if err := jsctx.mctx.{{$Type.Singular}}APIChangeCreatedAt(jsctx.ctx, jsctx.tx, id, createdAt); err != nil {
+  if err := {{$Type.Singular}}APIChangeCreatedAt(jsctx.ctx, jsctx.mctx, jsctx.tx, id, createdAt); err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
+func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
   if !truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
   }
@@ -1551,12 +1551,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatedAt(ctx context.Conte
 
 {{if $Type.HasCreatorID}}
 func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatorID(id, creatorID uuid.UUID) {
-  if err := jsctx.mctx.{{$Type.Singular}}APIChangeCreatorID(jsctx.ctx, jsctx.tx, id, creatorID); err != nil {
+  if err := {{$Type.Singular}}APIChangeCreatorID(jsctx.ctx, jsctx.mctx, jsctx.tx, id, creatorID); err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, tx *sql.Tx, id, creatorID uuid.UUID) error {
+func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id, creatorID uuid.UUID) error {
   if !truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
   }
@@ -1583,12 +1583,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeCreatorID(ctx context.Conte
 
 {{if $Type.HasUpdatedAt}}
 func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id uuid.UUID, updatedAt time.Time) {
-  if err := jsctx.mctx.{{$Type.Singular}}APIChangeUpdatedAt(jsctx.ctx, jsctx.tx, id, updatedAt); err != nil {
+  if err := {{$Type.Singular}}APIChangeUpdatedAt(jsctx.ctx, jsctx.mctx, jsctx.tx, id, updatedAt); err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
+func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
   if !truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
   }
@@ -1615,12 +1615,12 @@ func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Conte
 
 {{if $Type.HasUpdaterID}}
 func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdaterID(id, updaterID uuid.UUID) {
-  if err := jsctx.mctx.{{$Type.Singular}}APIChangeUpdaterID(jsctx.ctx, jsctx.tx, id, updaterID); err != nil {
+  if err := {{$Type.Singular}}APIChangeUpdaterID(jsctx.ctx, jsctx.mctx, jsctx.tx, id, updaterID); err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
 }
 
-func (mctx *ModelContext) {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, tx *sql.Tx, id, updaterID uuid.UUID) error {
+func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id, updaterID uuid.UUID) error {
   if !truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
   }
