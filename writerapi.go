@@ -622,6 +622,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
   }
 
   ctx, queue := withDeferredCallbackQueue(ctx)
+  ctx, log := withCallbackHistoryLog(ctx)
 
   ic := sqlbuilder.InsertColumns{}
 
@@ -779,6 +780,10 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
       a := *input
 
       if !skipped || forced {
+        if log != nil {
+          log.add("{{$Type.Singular}}", h.GetName(), input.ID)
+        }
+
         if err := h.Func(ctx, tx, uid, euid, options, &c, input); err != nil {
           return nil, errors.Wrapf(err, "{{$Type.Singular}}APICreate: BeforeSave callback %s for %s failed", h.Name, input.ID)
         }
@@ -1086,6 +1091,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
   }
 
   ctx, queue := withDeferredCallbackQueue(ctx)
+  ctx, log := withCallbackHistoryLog(ctx)
 
   p, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
   if err != nil {
@@ -1136,6 +1142,10 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
     for _, e := range mctx.handlers {
       h, ok := e.({{$Type.Singular}}BeforeSaveHandler)
       if !ok {
+        continue
+      }
+
+      if log != nil && log.has("{{$Type.Singular}}", h.GetName(), input.ID) {
         continue
       }
 
@@ -1209,6 +1219,10 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
       a := *input
 
       if !skipped || forced {
+        if log != nil {
+          log.add("{{$Type.Singular}}", h.GetName(), input.ID)
+        }
+
         if err := h.Func(ctx, tx, uid, euid, options, &c, input); err != nil {
           return nil, errors.Wrapf(err, "{{$Type.Singular}}APISave: BeforeSave callback %s for %s failed", h.Name, input.ID)
         }
@@ -1263,62 +1277,60 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
 {{- end}}
 {{- end}}
 
-  if skip {
-    return input, nil
-  }
-
+  if skip == false {
 {{if $Type.HasVersion -}}
-  input.Version = input.Version + 1
-  uc[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
+    input.Version = input.Version + 1
+    uc[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
 {{- if $Type.HasAudit}}
-  if !Compare(input.Version, p.Version) {
-    changed["Version"] = []interface{}{p.Version, input.Version}
-  }
+    if !Compare(input.Version, p.Version) {
+      changed["Version"] = []interface{}{p.Version, input.Version}
+    }
 {{- end}}
 {{- end}}
 {{if $Type.HasUpdatedAt -}}
-  input.UpdatedAt = now
-  uc[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
+    input.UpdatedAt = now
+    uc[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
 {{- if $Type.HasAudit}}
-  if !Compare(input.UpdatedAt, p.UpdatedAt) {
-    changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
-  }
+    if !Compare(input.UpdatedAt, p.UpdatedAt) {
+      changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
+    }
 {{- end}}
 {{- end}}
 {{if $Type.HasUpdaterID -}}
-  input.UpdaterID = euid
-  uc[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
+    input.UpdaterID = euid
+    uc[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
 {{- if $Type.HasAudit}}
-  if !Compare(input.UpdaterID, p.UpdaterID) {
-    changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
-  }
+    if !Compare(input.UpdaterID, p.UpdaterID) {
+      changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
+    }
 {{- end}}
 {{- end}}
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(uc).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(input.ID)))
+    qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(uc).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(input.ID)))
 
-  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
-  if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't generate query")
-  }
+    qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+    if err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't generate query")
+    }
 
-  if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't update record")
-  }
+    if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't update record")
+    }
 
 {{if $Type.HasVersion}}
-  if _, err := tx.ExecContext(ctx, "select pg_notify('model_changes', $1)", fmt.Sprintf("{{$Type.Singular}}/%s/%d", input.ID, input.Version)); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't send postgres notification")
-  }
+    if _, err := tx.ExecContext(ctx, "select pg_notify('model_changes', $1)", fmt.Sprintf("{{$Type.Singular}}/%s/%d", input.ID, input.Version)); err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't send postgres notification")
+    }
 {{end}}
 
-  changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
+    changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
 
 {{if $Type.HasAudit}}
-  if err := RecordAuditEvent(ctx, tx, uuid.NewV4(), time.Now(), uid, euid, "update", "{{$Type.Singular}}", input.ID, changed); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't create audit record")
-  }
+    if err := RecordAuditEvent(ctx, tx, uuid.NewV4(), time.Now(), uid, euid, "update", "{{$Type.Singular}}", input.ID, changed); err != nil {
+      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't create audit record")
+    }
 {{end}}
+  }
 
   if queue != nil {
     if err := queue.run(ctx, tx); err != nil {
