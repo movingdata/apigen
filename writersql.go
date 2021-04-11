@@ -27,6 +27,7 @@ func (SQLWriter) Imports(typeName string, namedType *types.Named, structType *ty
 		"fknsrs.biz/p/sqlbuilder",
 		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
+    "movingdata.com/p/wbi/internal/modelutil",
     "movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
 }
@@ -220,8 +221,8 @@ var sqlTemplate = template.Must(template.New("sqlTemplate").Funcs(tplFunc).Parse
 
 {{if $Root.HasFindOne}}
 // {{$Root.Name}}SQLFindOne gets a single {{$Root.Name}} record from the database according to a query
-func {{$Root.Name}}SQLFindOne(ctx context.Context, db RowQueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) (*{{$Root.Name}}, error) {
-	qb := sqlbuilder.Select().From({{$Root.Name | LC}}schema.Table).Columns(columnsAsExpressions({{$Root.Name | LC}}schema.Columns)...).OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Literal("0"), sqlbuilder.Literal("1")))
+func {{$Root.Name}}SQLFindOne(ctx context.Context, db modelutil.RowQueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) (*{{$Root.Name}}, error) {
+	qb := sqlbuilder.Select().From({{$Root.Name | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Root.Name | LC}}schema.Columns)...).OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Literal("0"), sqlbuilder.Literal("1")))
 
 	if fn != nil {
 		qb = fn(qb)
@@ -247,8 +248,8 @@ func {{$Root.Name}}SQLFindOne(ctx context.Context, db RowQueryerContext, fn func
 
 {{if $Root.HasFindOneByID}}
 // {{$Root.Name}}SQLFindOneByID gets a single {{$Root.Name}} record by its ID from the database
-func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db RowQueryerContext, id uuid.UUID) (*{{$Root.Name}}, error) {
-	if !truthy(id) {
+func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID) (*{{$Root.Name}}, error) {
+	if !modelutil.Truthy(id) {
 		return nil, errors.Errorf("{{$Root.Name}}SQLFindOneByID: id argument was empty")
 	}
 
@@ -263,8 +264,8 @@ func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db RowQueryerContext, id 
 
 {{if $Root.HasFindMultiple}}
 // {{$Root.Name}}SQLFindMultiple gets multiple {{$Root.Name}} records from the database according to a query
-func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db QueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) ([]{{$Root.Name}}, error) {
-	qb := sqlbuilder.Select().From({{$Root.Name | LC}}schema.Table).Columns(columnsAsExpressions({{$Root.Name | LC}}schema.Columns)...)
+func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db modelutil.QueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) ([]{{$Root.Name}}, error) {
+	qb := sqlbuilder.Select().From({{$Root.Name | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Root.Name | LC}}schema.Columns)...)
 
 	if fn != nil {
 		qb = fn(qb)
@@ -301,8 +302,8 @@ func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db QueryerContext, fn fu
 
 {{if (and $Root.CanCreate $Root.HasCreate)}}
 // {{$Root.Name}}SQLCreate creates a single {{$Root.Name}} record in the database
-func {{$Root.Name}}SQLCreate(ctx context.Context, db ExecerContext, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
-	if !truthy(m.ID) {
+func {{$Root.Name}}SQLCreate(ctx context.Context, db modelutil.ExecerContext, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
+	if !modelutil.Truthy(m.ID) {
 		return errors.Errorf("{{$Root.Name}}SQLCreate: ID field was empty")
 	}
 
@@ -340,8 +341,8 @@ func {{$Root.Name}}SQLCreate(ctx context.Context, db ExecerContext, userID uuid.
 
 {{if (and $Root.CanUpdate $Root.HasSave)}}
 // {{$Root.Name}}SQLSave updates a single {{$Root.Name}} record in the database
-func {{$Root.Name}}SQLSave(ctx context.Context, db interface { RowQueryerContext; ExecerContext }, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
-	if !truthy(m.ID) {
+func {{$Root.Name}}SQLSave(ctx context.Context, db interface { modelutil.RowQueryerContext; modelutil.ExecerContext }, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
+	if !modelutil.Truthy(m.ID) {
 		return errors.Errorf("{{$Root.Name}}SQLSave: ID field was empty")
 	}
 
@@ -367,7 +368,7 @@ func {{$Root.Name}}SQLSave(ctx context.Context, db interface { RowQueryerContext
 	}
 
 {{- range $Field := $Root.UpdateFields}}
-	if !Compare(m.{{$Field.GoName}}, p.{{$Field.GoName}}) {
+	if !modelutil.Compare(m.{{$Field.GoName}}, p.{{$Field.GoName}}) {
 		uc[{{$Root.Name | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(m.{{$Field.GoName}}){{else}}m.{{$Field.GoName}}{{end}})
 	}
 {{- end}}
