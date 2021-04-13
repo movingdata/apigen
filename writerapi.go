@@ -55,8 +55,8 @@ var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse
 {{$Type := .}}
 
 func init() {
-  registerFinder("{{$Type.Singular}}", func(ctx context.Context, mctx *ModelContext, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
-    v, err := {{$Type.Singular}}APIGet(ctx, mctx, db, id, uid, euid)
+  modelutil.RegisterFinder("{{$Type.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
+    v, err := {{$Type.Singular}}APIGet(ctx, nil, db, id, uid, euid)
     return v, err
   })
 }
@@ -615,7 +615,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
   }
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
-  ctx, log := withCallbackHistoryLog(ctx)
+  ctx, log := modelutil.WithCallbackHistoryLog(ctx)
 
   ic := sqlbuilder.InsertColumns{}
 
@@ -774,7 +774,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
 
       if !skipped || forced {
         if log != nil {
-          log.add("{{$Type.Singular}}", h.GetName(), input.ID)
+          log.Add("{{$Type.Singular}}", h.GetName(), input.ID)
         }
 
         if err := h.Func(ctx, tx, uid, euid, options, &c, input); err != nil {
@@ -926,7 +926,7 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
+      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1017,7 +1017,7 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
+      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1084,7 +1084,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
   }
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
-  ctx, log := withCallbackHistoryLog(ctx)
+  ctx, log := modelutil.WithCallbackHistoryLog(ctx)
 
   p, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
   if err != nil {
@@ -1138,7 +1138,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
         continue
       }
 
-      if log != nil && log.has("{{$Type.Singular}}", h.GetName(), input.ID) {
+      if log != nil && log.Has("{{$Type.Singular}}", h.GetName(), input.ID) {
         continue
       }
 
@@ -1213,7 +1213,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
 
       if !skipped || forced {
         if log != nil {
-          log.add("{{$Type.Singular}}", h.GetName(), input.ID)
+          log.Add("{{$Type.Singular}}", h.GetName(), input.ID)
         }
 
         if err := h.Func(ctx, tx, uid, euid, options, &c, input); err != nil {
@@ -1387,7 +1387,7 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
+      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1478,7 +1478,7 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := Find(r.Context(), k, mctx, tx, id, &uid, &euid)
+      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
