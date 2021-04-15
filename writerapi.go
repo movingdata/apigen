@@ -101,7 +101,7 @@ func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContex
   return &v, nil
 }
 
-func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
+func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   vars := mux.Vars(r)
 
   id, err := uuid.FromString(vars["id"])
@@ -365,7 +365,7 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
   return &m, nil
 }
 
-func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
+func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   var p {{$Type.Singular}}APISearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
@@ -403,7 +403,7 @@ func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, 
   }
 }
 
-func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
+func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   var p {{$Type.Singular}}APISearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
@@ -609,7 +609,7 @@ func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singul
   return v
 }
 
-func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
   if !modelutil.Truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
   }
@@ -729,7 +729,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
     })
     defer func() { exitIteration() }()
 
-    for _, e := range mctx.handlers {
+    for _, e := range mctx.GetHandlers() {
       h, ok := e.({{$Type.Singular}}BeforeSaveHandler)
       if !ok {
         continue
@@ -880,7 +880,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
   return v, nil
 }
 
-func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input {{$Type.Singular}}
 
   switch r.Header.Get("content-type") {
@@ -969,7 +969,7 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
   }
 }
 
-func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input struct { Records []{{$Type.Singular}} "json:\"records\"" }
   var output struct {
     Time time.Time "json:\"time\""
@@ -1078,7 +1078,7 @@ func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singula
   return v
 }
 
-func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
   if !modelutil.Truthy(input.ID) {
     return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
@@ -1132,7 +1132,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
 
   forcing := false
   if options != nil {
-    for _, e := range mctx.handlers {
+    for _, e := range mctx.GetHandlers() {
       h, ok := e.({{$Type.Singular}}BeforeSaveHandler)
       if !ok {
         continue
@@ -1170,7 +1170,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
     })
     defer func() { exitIteration() }()
 
-    for _, e := range mctx.handlers {
+    for _, e := range mctx.GetHandlers() {
       h, ok := e.({{$Type.Singular}}BeforeSaveHandler)
       if !ok {
         continue
@@ -1341,7 +1341,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
   return input, nil
 }
 
-func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input {{$Type.Singular}}
 
   switch r.Header.Get("content-type") {
@@ -1430,7 +1430,7 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
   }
 }
 
-func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Request, mctx *ModelContext, db *sql.DB, uid, euid uuid.UUID) {
+func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid uuid.UUID) {
   var input struct { Records []{{$Type.Singular}} "json:\"records\"" }
   var output struct {
     Time time.Time "json:\"time\""
@@ -1529,7 +1529,7 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id uuid.UUID, createdA
   }
 }
 
-func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
+func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
   if !modelutil.Truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
   }
@@ -1561,7 +1561,7 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatorID(id, creatorID uuid.UUI
   }
 }
 
-func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id, creatorID uuid.UUID) error {
+func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, creatorID uuid.UUID) error {
   if !modelutil.Truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
   }
@@ -1593,7 +1593,7 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id uuid.UUID, updatedA
   }
 }
 
-func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
+func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
   if !modelutil.Truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
   }
@@ -1625,7 +1625,7 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdaterID(id, updaterID uuid.UUI
   }
 }
 
-func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *ModelContext, tx *sql.Tx, id, updaterID uuid.UUID) error {
+func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, updaterID uuid.UUID) error {
   if !modelutil.Truthy(id) {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
   }
