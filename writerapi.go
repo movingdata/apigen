@@ -56,20 +56,20 @@ var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse
 
 func init() {
   modelutil.RegisterFinder("{{$Type.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
-    v, err := {{$Type.Singular}}APIGet(ctx, nil, db, id, uid, euid)
+    v, err := {{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
     return v, err
   })
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APIGet(jsctx.ctx, jsctx.mctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
+  v, err := {{$Type.Singular}}APIGet(jsctx.ctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func {{$Type.Singular}}APIGet(ctx context.Context, mctx *ModelContext, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -109,7 +109,7 @@ func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mct
     panic(err)
   }
 
-  v, err := {{$Type.Singular}}APIGet(r.Context(), mctx, db, id, uid, euid)
+  v, err := {{$Type.Singular}}APIGet(r.Context(), db, id, uid, euid)
   if err != nil {
     panic(err)
   }
@@ -250,14 +250,14 @@ type {{$Type.Singular}}APISearchResponse struct {
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular}}APISearchParameters) *{{$Type.Singular}}APISearchResponse {
-  v, err := {{$Type.Singular}}APISearch(jsctx.ctx, jsctx.mctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
+  v, err := {{$Type.Singular}}APISearch(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func {{$Type.Singular}}APISearch(ctx context.Context, mctx *ModelContext, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
+func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -317,14 +317,14 @@ func {{$Type.Singular}}APISearch(ctx context.Context, mctx *ModelContext, db mod
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular}}APIFilterParameters) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APIFind(jsctx.ctx, jsctx.mctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
+  v, err := {{$Type.Singular}}APIFind(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
 }
 
-func {{$Type.Singular}}APIFind(ctx context.Context, mctx *ModelContext, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -371,7 +371,7 @@ func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, 
     panic(err)
   }
 
-  v, err := {{$Type.Singular}}APISearch(r.Context(), mctx, db, &p, uid, euid)
+  v, err := {{$Type.Singular}}APISearch(r.Context(), db, &p, uid, euid)
   if err != nil {
     panic(err)
   }
@@ -409,7 +409,7 @@ func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Reques
     panic(err)
   }
 
-  v, err := {{$Type.Singular}}APISearch(r.Context(), mctx, db, &p, uid, euid)
+  v, err := {{$Type.Singular}}APISearch(r.Context(), db, &p, uid, euid)
   if err != nil {
     panic(err)
   }
@@ -851,7 +851,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
   }
 {{end}}
 
-  v, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
+  v, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after creation")
   }
@@ -869,7 +869,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *ModelContext, tx *sq
       return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't run callback queue")
     }
 
-    vv, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
+    vv, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
     if err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after running callback queue")
     }
@@ -1086,7 +1086,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
   ctx, log := modelutil.WithCallbackHistoryLog(ctx)
 
-  p, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
+  p, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't fetch previous state")
   }
@@ -1330,7 +1330,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *ModelContext, tx *sql.
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't run callback queue")
     }
 
-    vv, err := {{$Type.Singular}}APIGet(ctx, mctx, tx, input.ID, &uid, &euid)
+    vv, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
     if err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't get object after running callback queue")
     }
