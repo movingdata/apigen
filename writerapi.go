@@ -38,6 +38,7 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"movingdata.com/p/wbi/internal/cookiesession",
 		"movingdata.com/p/wbi/internal/modelutil",
 		"movingdata.com/p/wbi/internal/traceregistry",
+		"movingdata.com/p/wbi/models/modelapifilter/" + strings.ToLower(typeName) + "apifilter",
 		"movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
 		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
@@ -146,110 +147,13 @@ func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mct
   }
 }
 
-type {{$Type.Singular}}APIFilterParameters struct {
-{{- range $Field := $Type.Fields}}
-{{- range $Filter := $Field.Filters}}
-  {{$Filter.GoName}} {{$Filter.GoType}} "schema:\"{{$Filter.Name}}\" json:\"{{$Filter.Name}},omitempty\" api_filter:\"{{$Field.SQLName}},{{$Filter.Operator}}\""
-{{- end}}
-{{- end}}
-{{- range $Filter := $Type.SpecialFilters}}
-  {{$Filter.GoName}} {{$Filter.GoType}} "schema:\"{{$Filter.Name}}\" json:\"{{$Filter.Name}},omitempty\""
-{{- end}}
-}
-
-func (p *{{$Type.Singular}}APIFilterParameters) AddFilters(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement {
-  if p == nil {
-    return q
-  }
-
-  a := apifilter.BuildFilters({{$Type.Singular | LC}}schema.Table, p)
-
-{{range $Filter := $Type.SpecialFilters}}
-    if !modelutil.IsNil(p.{{$Filter.GoName}}) {
-      a = append(a, {{$Type.Singular}}SpecialFilter{{$Filter.GoName}}(*p.{{$Filter.GoName}}))
-    }
-{{- end}}
-
-  if len(a) > 0 {
-    q = q.AndWhere(sqlbuilder.BooleanOperator("AND", a...))
-  }
-
-  return q
-}
-
-type {{$Type.Singular}}APISearchParameters struct {
-  {{$Type.Singular}}APIFilterParameters
-  Order *string "schema:\"order\" json:\"order,omitempty\""
-  Offset *int "schema:\"offset\" json:\"offset,omitempty\""
-  Limit *int "schema:\"limit\" json:\"limit,omitempty\""
-}
-
-func (p *{{$Type.Singular}}APISearchParameters) AddFilters(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement {
-  if p == nil {
-    return q
-  }
-
-  return p.{{$Type.Singular}}APIFilterParameters.AddFilters(q)
-}
-
-func (p *{{$Type.Singular}}APISearchParameters) AddLimits(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement {
-  if p.Order != nil {
-    var l []sqlbuilder.AsOrderingTerm
-    for _, s := range strings.Split(*p.Order, ",") {
-      if len(s) < 1 {
-        continue
-      }
-
-      var fld sqlbuilder.AsExpr
-      desc := false
-      if s[0] == '-' {
-        s = s[1:]
-        desc = true
-      }
-
-      switch s {
-{{- range $Field := $Type.Fields}}
-{{- if not $Field.NoOrder}}
-      case "{{$Field.APIName}}":
-        fld = {{$Type.Singular | LC}}schema.Column{{$Field.GoName}}
-{{- end}}
-{{- end}}
-{{- range $Field := $Type.SpecialOrders}}
-      case "{{$Field.APIName}}":
-        l = append(l, {{$Type.Singular}}SpecialOrder{{$Field.GoName}}(desc)...)
-{{- end}}
-      }
-
-      if fld != nil {
-        if desc {
-          l = append(l, sqlbuilder.OrderDesc(fld))
-        } else {
-          l = append(l, sqlbuilder.OrderAsc(fld))
-        }
-      }
-    }
-
-    if len(l) > 0 {
-      q = q.OrderBy(l...)
-    }
-  }
-
-  if p.Offset != nil && p.Limit != nil {
-    q = q.OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Bind(*p.Offset), sqlbuilder.Bind(*p.Limit)))
-  } else if p.Limit != nil {
-    q = q.OffsetLimit(sqlbuilder.OffsetLimit(sqlbuilder.Bind(0), sqlbuilder.Bind(*p.Limit)))
-  }
-
-  return q
-}
-
 type {{$Type.Singular}}APISearchResponse struct {
   Records []*{{$Type.Singular}} "json:\"records\""
   Total int "json:\"total\""
   Time time.Time "json:\"time\""
 }
 
-func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular}}APISearchParameters) *{{$Type.Singular}}APISearchResponse {
+func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular | LC}}apifilter.SearchParameters) *{{$Type.Singular}}APISearchResponse {
   v, err := {{$Type.Singular}}APISearch(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
@@ -257,7 +161,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular}}APISearchPa
   return v
 }
 
-func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APISearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
+func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular | LC}}apifilter.SearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -316,7 +220,7 @@ func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContex
   }, nil
 }
 
-func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular}}APIFilterParameters) *{{$Type.Singular}} {
+func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular | LC}}apifilter.FilterParameters) *{{$Type.Singular}} {
   v, err := {{$Type.Singular}}APIFind(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
@@ -324,7 +228,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular}}APIFilterPara
   return v
 }
 
-func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular}}APIFilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular | LC}}apifilter.FilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -366,7 +270,7 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
 }
 
 func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
-  var p {{$Type.Singular}}APISearchParameters
+  var p {{$Type.Singular | LC}}apifilter.SearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
   }
@@ -404,7 +308,7 @@ func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, 
 }
 
 func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
-  var p {{$Type.Singular}}APISearchParameters
+  var p {{$Type.Singular | LC}}apifilter.SearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
   }

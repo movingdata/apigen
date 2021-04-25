@@ -242,6 +242,9 @@ var tplFunc = template.FuncMap{
 	"LC": func(s string) string {
 		return strings.ToLower(s)
 	},
+	"UnPtr": func(s string) string {
+		return strings.TrimPrefix(s, "*")
+	},
 }
 
 func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*apitypes.Model, error) {

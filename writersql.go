@@ -27,8 +27,8 @@ func (SQLWriter) Imports(typeName string, namedType *types.Named, structType *ty
 		"fknsrs.biz/p/sqlbuilder",
 		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
-    "movingdata.com/p/wbi/internal/modelutil",
-    "movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
+		"movingdata.com/p/wbi/internal/modelutil",
+		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
 }
 
@@ -53,7 +53,7 @@ var sqlTypes = map[string]string{
 }
 
 func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
-	d, err := getSQLTemplateData(typeName,namedType,structType)
+	d, err := getSQLTemplateData(typeName, namedType, structType)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func getSQLTemplateData(typeName string, namedType *types.Named, structType *typ
 
 		sqlType, ok := sqlTypes[strings.TrimPrefix(ft.String(), "movingdata.com/p/wbi/vendor/")]
 		if !ok {
-			return nil,errors.Errorf("can't determine sql type for go type %q", ft)
+			return nil, errors.Errorf("can't determine sql type for go type %q", ft)
 		}
 
 		if a, ok := sqlArgs["table"]; ok && len(a) > 0 {

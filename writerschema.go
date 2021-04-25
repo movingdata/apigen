@@ -1,17 +1,20 @@
 package main
 
 import (
-	"go/types"
-	"fmt"
 	"bytes"
-	"io/ioutil"
+	"fmt"
+	"go/types"
 	"io"
+	"io/ioutil"
+	"path/filepath"
 	"strings"
 	"text/template"
-	"path/filepath"
 )
 
-type SchemaWriter struct{ dir string; pkgs []string }
+type SchemaWriter struct {
+	dir  string
+	pkgs []string
+}
 
 func NewSchemaWriter(dir string) *SchemaWriter { return &SchemaWriter{dir: dir} }
 
@@ -32,12 +35,12 @@ func (SchemaWriter) Imports(typeName string, namedType *types.Named, structType 
 }
 
 func (w *SchemaWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
-	d, err := getSQLTemplateData(typeName,namedType,structType)
+	d, err := getSQLTemplateData(typeName, namedType, structType)
 	if err != nil {
 		return err
 	}
 
-	w.pkgs = append(w.pkgs, w.PackageName(typeName, namedType,structType))
+	w.pkgs = append(w.pkgs, w.PackageName(typeName, namedType, structType))
 
 	return schemaTemplate.Execute(wr, d)
 }
@@ -49,7 +52,7 @@ func (w *SchemaWriter) Finish(dry bool) error {
 	fmt.Fprintf(buf, "import (\n")
 	fmt.Fprintf(buf, "  \"movingdata.com/p/wbi/internal/apitypes\"\n")
 	for _, pkg := range w.pkgs {
-		fmt.Fprintf(buf, "  %q\n", "movingdata.com/p/wbi/models/modelschema/" + pkg)
+		fmt.Fprintf(buf, "  %q\n", "movingdata.com/p/wbi/models/modelschema/"+pkg)
 	}
 	fmt.Fprintf(buf, ")\n\n")
 	fmt.Fprintf(buf, "var Tables = map[string]apitypes.Table{\n")
@@ -59,7 +62,7 @@ func (w *SchemaWriter) Finish(dry bool) error {
 	fmt.Fprintf(buf, "}\n")
 
 	if !dry {
-		if err := ioutil.WriteFile(w.dir + "/modelschema/tables.go", buf.Bytes(), 0644); err != nil {
+		if err := ioutil.WriteFile(w.dir+"/modelschema/tables.go", buf.Bytes(), 0644); err != nil {
 			return err
 		}
 	}

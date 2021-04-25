@@ -110,6 +110,9 @@ func main() {
 		if len(writerMap) == 0 || writerMap["api"] {
 			writerList = append(writerList, NewAPIWriter(goDir))
 		}
+		if len(writerMap) == 0 || writerMap["apifilter"] {
+			writerList = append(writerList, NewAPIFilterWriter(goDir))
+		}
 		if len(writerMap) == 0 || writerMap["enum"] {
 			writerList = append(writerList, NewEnumWriter(goDir))
 		}
