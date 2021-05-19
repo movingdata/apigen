@@ -30,7 +30,6 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"github.com/satori/go.uuid",
 		"github.com/shopspring/decimal",
 		"github.com/timewasted/go-accept-headers",
-		"github.com/vmihailenco/msgpack/v5",
 		"movingdata.com/p/wbi/internal/apihelpers",
 		"movingdata.com/p/wbi/internal/apifilter",
 		"movingdata.com/p/wbi/internal/apitypes",
@@ -122,16 +121,9 @@ func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mct
 
   a := accept.Parse(r.Header.Get("accept"))
 
-  f, _ := a.Negotiate("application/json", "application/msgpack")
+  f, _ := a.Negotiate("application/json")
 
   switch f {
-  case "application/msgpack":
-    rw.Header().Set("content-type", "application/msgpack")
-    rw.WriteHeader(http.StatusOK)
-
-    if err := msgpack.NewEncoder(rw).Encode(v); err != nil {
-      panic(err)
-    }
   default:
     rw.Header().Set("content-type", "application/json")
     rw.WriteHeader(http.StatusOK)
@@ -282,16 +274,9 @@ func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, 
 
   a := accept.Parse(r.Header.Get("accept"))
 
-  f, _ := a.Negotiate("application/json", "application/msgpack")
+  f, _ := a.Negotiate("application/json")
 
   switch f {
-  case "application/msgpack":
-    rw.Header().Set("content-type", "application/msgpack")
-    rw.WriteHeader(http.StatusOK)
-
-    if err := msgpack.NewEncoder(rw).Encode(v); err != nil {
-      panic(err)
-    }
   default:
     rw.Header().Set("content-type", "application/json")
     rw.WriteHeader(http.StatusOK)
@@ -788,10 +773,6 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
   var input {{$Type.Singular}}
 
   switch r.Header.Get("content-type") {
-  case "application/msgpack":
-    if err := msgpack.NewDecoder(r.Body).Decode(&input); err != nil {
-      panic(err)
-    }
   default:
     if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
       panic(err)
@@ -848,16 +829,9 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
 
   a := accept.Parse(r.Header.Get("accept"))
 
-  f, _ := a.Negotiate("application/json", "application/msgpack")
+  f, _ := a.Negotiate("application/json")
 
   switch f {
-  case "application/msgpack":
-    rw.Header().Set("content-type", "application/msgpack")
-    rw.WriteHeader(http.StatusOK)
-
-    if err := msgpack.NewEncoder(rw).Encode(result); err != nil {
-      panic(err)
-    }
   default:
     rw.Header().Set("content-type", "application/json")
     rw.WriteHeader(http.StatusOK)
@@ -882,10 +856,6 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
   }
 
   switch r.Header.Get("content-type") {
-  case "application/msgpack":
-    if err := msgpack.NewDecoder(r.Body).Decode(&input); err != nil {
-      panic(err)
-    }
   default:
     if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
       panic(err)
@@ -939,16 +909,9 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
 
   a := accept.Parse(r.Header.Get("accept"))
 
-  f, _ := a.Negotiate("application/json", "application/msgpack")
+  f, _ := a.Negotiate("application/json")
 
   switch f {
-  case "application/msgpack":
-    rw.Header().Set("content-type", "application/msgpack")
-    rw.WriteHeader(http.StatusOK)
-
-    if err := msgpack.NewEncoder(rw).Encode(output); err != nil {
-      panic(err)
-    }
   default:
     rw.Header().Set("content-type", "application/json")
     rw.WriteHeader(http.StatusOK)
@@ -1249,10 +1212,6 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
   var input {{$Type.Singular}}
 
   switch r.Header.Get("content-type") {
-  case "application/msgpack":
-    if err := msgpack.NewDecoder(r.Body).Decode(&input); err != nil {
-      panic(err)
-    }
   default:
     if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
       panic(err)
@@ -1309,16 +1268,9 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
 
   a := accept.Parse(r.Header.Get("accept"))
 
-  f, _ := a.Negotiate("application/json", "application/msgpack")
+  f, _ := a.Negotiate("application/json")
 
   switch f {
-  case "application/msgpack":
-    rw.Header().Set("content-type", "application/msgpack")
-    rw.WriteHeader(http.StatusOK)
-
-    if err := msgpack.NewEncoder(rw).Encode(result); err != nil {
-      panic(err)
-    }
   default:
     rw.Header().Set("content-type", "application/json")
     rw.WriteHeader(http.StatusOK)
@@ -1343,10 +1295,6 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
   }
 
   switch r.Header.Get("content-type") {
-  case "application/msgpack":
-    if err := msgpack.NewDecoder(r.Body).Decode(&input); err != nil {
-      panic(err)
-    }
   default:
     if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
       panic(err)
@@ -1400,16 +1348,9 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
 
   a := accept.Parse(r.Header.Get("accept"))
 
-  f, _ := a.Negotiate("application/json", "application/msgpack")
+  f, _ := a.Negotiate("application/json")
 
   switch f {
-  case "application/msgpack":
-    rw.Header().Set("content-type", "application/msgpack")
-    rw.WriteHeader(http.StatusOK)
-
-    if err := msgpack.NewEncoder(rw).Encode(output); err != nil {
-      panic(err)
-    }
   default:
     rw.Header().Set("content-type", "application/json")
     rw.WriteHeader(http.StatusOK)
