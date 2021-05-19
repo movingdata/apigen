@@ -38,6 +38,7 @@ func (APIFilterWriter) Imports(typeName string, namedType *types.Named, structTy
 		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
 		"github.com/shopspring/decimal",
+		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
 }
 
