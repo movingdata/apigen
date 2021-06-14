@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/types"
 	"io"
+	"net/url"
 	"reflect"
 	"regexp"
 	"sort"
@@ -362,6 +363,12 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 					b = append(b, lkucc.String(v))
 				}
+
+				label, err := url.QueryUnescape(b[1])
+				if err != nil {
+					return nil, errors.Wrapf(err, "bad percent-encoding in enum; field=%v.%v", namedType.String(), f.Name())
+				}
+				b[1] = label
 
 				enums[i] = apitypes.Enum{b[0], b[1], b[2]}
 			}
