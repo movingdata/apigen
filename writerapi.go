@@ -61,6 +61,22 @@ func init() {
   })
 }
 
+{{range $Field := $Type.Fields}}
+{{- if $Field.Enum}}
+func (jsctx *JSContext) {{$Type.Singular}}EnumValid{{$Field.GoName}}(v string) bool {
+  return {{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v]
+}
+
+func (jsctx *JSContext) {{$Type.Singular}}EnumValues{{$Field.GoName}}() []string {
+  return {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}
+}
+
+func (jsctx *JSContext) {{$Type.Singular}}EnumLabel{{$Field.GoName}}(v string) string {
+  return {{$Type.Singular | LC}}enum.Labels{{$Field.GoName}}[v]
+}
+{{- end}}
+{{end}}
+
 func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} {
   v, err := {{$Type.Singular}}APIGet(jsctx.ctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
   if err != nil {
