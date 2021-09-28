@@ -592,7 +592,7 @@ function batchFetch(id: string, dispatch: (ev: any) => void) {
 export const {{$Type.LowerPlural}}Fetch = (id: string) => (
   dispatch: (ev: any) => void
 ) => {
-	if (typeof id !== 'string') { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a string'); }
+  if (typeof id !== 'string') { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a string'); }
   if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a uuid'); }
 
   batchFetch(id, dispatch);
