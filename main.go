@@ -257,6 +257,8 @@ func main() {
 
 		for _, w := range writerList {
 			if f, ok := w.(finisher); ok {
+				log.Printf("running finisher %s\n", w.Name())
+
 				logTime("finishing writer", func() {
 					if err := f.Finish(dry); err != nil {
 						panic(err)
