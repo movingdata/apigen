@@ -25,6 +25,7 @@ var (
 	jsDir             string
 	swaggerFile       string
 	dry               bool
+	damp              bool
 	filter            string
 	writers           string
 	verbose           bool
@@ -37,6 +38,7 @@ func init() {
 	flag.StringVar(&jsDir, "js_dir", "", "Directory to output JavaScript code to (default is ../client/src/ducks relative to the source files).")
 	flag.StringVar(&swaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
 	flag.BoolVar(&dry, "dry", false, "Dry run (don't write files).")
+	flag.BoolVar(&damp, "damp", false, "Damp run (don't write main files).")
 	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
 	flag.StringVar(&writers, "writers", "api,apifilter,enum,schema,sql,js,swagger", "Run only the specified writers.")
 	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
@@ -233,7 +235,7 @@ func main() {
 
 				nice := buf.Bytes()
 
-				if w.Language() == "go" && !disableFormatting {
+				if w.Language() == "go" && !disableFormatting && !damp {
 					logTime("formatting go code", func() {
 						d, err := imports.Process(filename, nice, nil)
 						if err != nil {
@@ -243,7 +245,7 @@ func main() {
 					})
 				}
 
-				if !dry {
+				if !dry && !damp {
 					logTime("writing file", func() {
 						if err := ioutil.WriteFile(filename, nice, 0644); err != nil {
 							log.Fatalf("error writing code for %s (%s): %s", typeName, w.Name(), err.Error())
