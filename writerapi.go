@@ -57,7 +57,13 @@ var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse
 func init() {
   modelutil.RegisterFinder("{{$Type.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
     v, err := {{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
-    return v, err
+    if err != nil {
+      return nil, err
+    }
+    if v == nil {
+      return nil, nil
+    }
+    return v, nil
   })
 }
 
