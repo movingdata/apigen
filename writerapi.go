@@ -611,6 +611,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
     ModelType: "{{$Type.Singular}}",
     ModelID: input.ID,
     ModelData: input,
+    Stack: getStack(),
   })
   defer func() { exitActivity() }()
 
@@ -1012,6 +1013,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     ModelType: "{{$Type.Singular}}",
     ModelID: input.ID,
     ModelData: input,
+    Stack: getStack(),
   })
   defer func() { exitActivity() }()
 
