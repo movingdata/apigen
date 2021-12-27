@@ -505,7 +505,7 @@ func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bo
 
 {{if $Type.CanCreate}}
 func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APICreate(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
+  v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}Create#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -513,7 +513,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$T
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singular}}, options modelutil.APIOptions) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APICreate(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
+  v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}CreateWithOptions#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -527,6 +527,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
   ctx, log := modelutil.WithCallbackHistoryLog(ctx)
+  ctx = modelutil.WithPathEntry(ctx, "API#{{$Type.Singular}}Create#"+input.ID.String())
 
   ic := sqlbuilder.InsertColumns{}
 
@@ -611,7 +612,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
     ModelType: "{{$Type.Singular}}",
     ModelID: input.ID,
     ModelData: input,
-    Stack: getStack(),
+    Path: modelutil.GetPath(ctx),
   })
   defer func() { exitActivity() }()
 
@@ -689,7 +690,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
           log.Add("{{$Type.Singular}}", h.GetName(), input.ID)
         }
 
-        if err := h.Func(ctx, tx, uid, euid, options, &c, input); err != nil {
+        if err := h.Func(modelutil.WithPathEntry(ctx, "CB#"+h.GetQualifiedName()+"#"+input.ID.String()), tx, uid, euid, options, &c, input); err != nil {
           return nil, errors.Wrapf(err, "{{$Type.Singular}}APICreate: BeforeSave callback %s for %s failed", h.Name, input.ID)
         }
       }
@@ -802,13 +803,15 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
     }
   }
 
-  tx, err := db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+  ctx := modelutil.WithPathEntry(r.Context(), "HTTP#{{$Type.Singular}}Create#"+input.ID.String())
+
+  tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
   if err != nil {
     panic(err)
   }
   defer tx.Rollback()
 
-  if _, err := tx.ExecContext(r.Context(), "set constraints all deferred"); err != nil {
+  if _, err := tx.ExecContext(ctx, "set constraints all deferred"); err != nil {
     panic(err)
   }
 
@@ -817,7 +820,7 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
     panic(err)
   }
 
-  v, err := {{$Type.Singular}}APICreate(r.Context(), mctx, tx, uid, euid, time.Now(), &input, options)
+  v, err := {{$Type.Singular}}APICreate(ctx, mctx, tx, uid, euid, time.Now(), &input, options)
   if err != nil {
     panic(err)
   }
@@ -834,7 +837,7 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
+      v, err := modelutil.Find(ctx, k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -885,13 +888,15 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
     }
   }
 
-  tx, err := db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+  ctx := modelutil.WithPathEntry(r.Context(), "HTTP#{{$Type.Singular}}CreateMultiple")
+
+  tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
   if err != nil {
     panic(err)
   }
   defer tx.Rollback()
 
-  if _, err := tx.ExecContext(r.Context(), "set constraints all deferred"); err != nil {
+  if _, err := tx.ExecContext(ctx, "set constraints all deferred"); err != nil {
     panic(err)
   }
 
@@ -901,7 +906,7 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
   }
 
   for i := range input.Records {
-    v, err := {{$Type.Singular}}APICreate(r.Context(), mctx, tx, uid, euid, time.Now(), &input.Records[i], options)
+    v, err := {{$Type.Singular}}APICreate(ctx, mctx, tx, uid, euid, time.Now(), &input.Records[i], options)
     if err != nil {
       panic(err)
     }
@@ -914,7 +919,7 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
+      v, err := modelutil.Find(ctx, k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -953,7 +958,7 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
 
 {{if $Type.CanUpdate}}
 func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APISave(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
+  v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}Save#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -961,7 +966,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Ty
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singular}}, options *modelutil.APIOptions) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APISave(jsctx.ctx, jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
+  v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}SaveWithOptions#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -975,6 +980,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
   ctx, log := modelutil.WithCallbackHistoryLog(ctx)
+  ctx = modelutil.WithPathEntry(ctx, "API#{{$Type.Singular}}Save#"+input.ID.String())
 
   p, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
@@ -1013,7 +1019,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     ModelType: "{{$Type.Singular}}",
     ModelID: input.ID,
     ModelData: input,
-    Stack: getStack(),
+    Path: modelutil.GetPath(ctx),
   })
   defer func() { exitActivity() }()
 
@@ -1107,7 +1113,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
           log.Add("{{$Type.Singular}}", h.GetName(), input.ID)
         }
 
-        if err := h.Func(ctx, tx, uid, euid, options, &c, input); err != nil {
+        if err := h.Func(modelutil.WithPathEntry(ctx, "CB#"+h.GetQualifiedName()+"#"+input.ID.String()), tx, uid, euid, options, &c, input); err != nil {
           return nil, errors.Wrapf(err, "{{$Type.Singular}}APISave: BeforeSave callback %s for %s failed", h.Name, input.ID)
         }
       }
@@ -1242,13 +1248,15 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
     }
   }
 
-  tx, err := db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+  ctx := modelutil.WithPathEntry(r.Context(), "HTTP#{{$Type.Singular}}Save#"+input.ID.String())
+
+  tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
   if err != nil {
     panic(err)
   }
   defer tx.Rollback()
 
-  if _, err := tx.ExecContext(r.Context(), "set constraints all deferred"); err != nil {
+  if _, err := tx.ExecContext(ctx, "set constraints all deferred"); err != nil {
     panic(err)
   }
 
@@ -1257,7 +1265,7 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
     panic(err)
   }
 
-  v, err := {{$Type.Singular}}APISave(r.Context(), mctx, tx, uid, euid, time.Now(), &input, options)
+  v, err := {{$Type.Singular}}APISave(ctx, mctx, tx, uid, euid, time.Now(), &input, options)
   if err != nil {
     panic(err)
   }
@@ -1274,7 +1282,7 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
+      v, err := modelutil.Find(ctx, k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
@@ -1325,13 +1333,15 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
     }
   }
 
-  tx, err := db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+  ctx := modelutil.WithPathEntry(r.Context(), "HTTP#{{$Type.Singular}}SaveMultiple")
+
+  tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
   if err != nil {
     panic(err)
   }
   defer tx.Rollback()
 
-  if _, err := tx.ExecContext(r.Context(), "set constraints all deferred"); err != nil {
+  if _, err := tx.ExecContext(ctx, "set constraints all deferred"); err != nil {
     panic(err)
   }
 
@@ -1341,7 +1351,7 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
   }
 
   for i := range input.Records {
-    v, err := {{$Type.Singular}}APISave(r.Context(), mctx, tx, uid, euid, time.Now(), &input.Records[i], options)
+    v, err := {{$Type.Singular}}APISave(ctx, mctx, tx, uid, euid, time.Now(), &input.Records[i], options)
     if err != nil {
       panic(err)
     }
@@ -1354,7 +1364,7 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
 
   for k, l := range changeregistry.ChangesFromRequest(r) {
     for _, id := range l {
-      v, err := modelutil.Find(r.Context(), k, tx, id, &uid, &euid)
+      v, err := modelutil.Find(ctx, k, tx, id, &uid, &euid)
       if err != nil {
         panic(err)
       }
