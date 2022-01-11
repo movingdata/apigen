@@ -70,7 +70,7 @@ export type {{$Type.Singular}}{{$Field.GoName}} =
 {{- end}}
 
 {{range $Enum := $Field.Enum}}
-export const {{$Type.LowerPlural}}Enum{{$Field.GoName}}{{$Enum.GoName}}: {{$Type.Singular}}{{$Field.GoName}} = "{{$Enum.Value}}";
+export const {{$Type.LowerPlural}}Enum{{$Field.GoName}}{{$Enum.GoName}} = '{{$Enum.Value}}';
 {{- end}}
 
 export const {{$Type.LowerPlural}}Values{{$Field.GoName}}: $ReadOnlyArray<{{$Type.Singular}}{{$Field.GoName}}> = [
@@ -81,7 +81,7 @@ export const {{$Type.LowerPlural}}Values{{$Field.GoName}}: $ReadOnlyArray<{{$Typ
 
 export const {{$Type.LowerPlural}}Labels{{$Field.GoName}}: { [key: {{$Type.Singular}}{{$Field.GoName}}]: string } = {
 {{- range $Enum := $Field.Enum}}
-  [{{$Type.LowerPlural}}Enum{{$Field.GoName}}{{$Enum.GoName}}]: "{{$Enum.Label}}",
+  [{{$Type.LowerPlural}}Enum{{$Field.GoName}}{{$Enum.GoName}}]: '{{$Enum.Label}}',
 {{- end}}
 }
 {{- end}}
