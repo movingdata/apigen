@@ -606,7 +606,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 {{- end}}
 
   exitActivity := traceregistry.Enter(ctx, &traceregistry.EventModelActivity{
-    ID: uuid.NewV4(),
+    ID: uuid.Must(uuid.NewV4()),
     Time: time.Now(),
     Action: "create",
     ModelType: "{{$Type.Singular}}",
@@ -634,7 +634,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
     }
 
     exitIteration := traceregistry.Enter(ctx, &traceregistry.EventIteration{
-      ID: uuid.NewV4(),
+      ID: uuid.Must(uuid.NewV4()),
       Time: time.Now(),
       ObjectType: "{{$Type.Singular}}",
       ObjectID: input.ID,
@@ -674,7 +674,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
       triggerChanges := triggered.Changes(&c, input)
 
       exitCallback := traceregistry.Enter(ctx, &traceregistry.EventCallback{
-        ID: uuid.NewV4(),
+        ID: uuid.Must(uuid.NewV4()),
         Time: before,
         Name: h.GetQualifiedName(),
         Skipped: skipped,
@@ -696,7 +696,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
       }
 
       traceregistry.Add(ctx, traceregistry.EventCallbackComplete{
-        ID: uuid.NewV4(),
+        ID: uuid.Must(uuid.NewV4()),
         Time: time.Now(),
         Name: h.GetQualifiedName(),
         Duration: time.Now().Sub(before),
@@ -772,7 +772,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
   changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
 
 {{if $Type.HasAudit}}
-  if err := modelutil.RecordAuditEvent(ctx, tx, uuid.NewV4(), time.Now(), uid, euid, "create", "{{$Type.Singular}}", input.ID, fields); err != nil {
+  if err := modelutil.RecordAuditEvent(ctx, tx, uuid.Must(uuid.NewV4()), time.Now(), uid, euid, "create", "{{$Type.Singular}}", input.ID, fields); err != nil {
     return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't create audit record")
   }
 {{end}}
@@ -1013,7 +1013,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 {{- end}}
 
   exitActivity := traceregistry.Enter(ctx, &traceregistry.EventModelActivity{
-    ID: uuid.NewV4(),
+    ID: uuid.Must(uuid.NewV4()),
     Time: time.Now(),
     Action: "save",
     ModelType: "{{$Type.Singular}}",
@@ -1059,7 +1059,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     }
 
     exitIteration := traceregistry.Enter(ctx, &traceregistry.EventIteration{
-      ID: uuid.NewV4(),
+      ID: uuid.Must(uuid.NewV4()),
       Time: time.Now(),
       ObjectType: "{{$Type.Singular}}",
       ObjectID: input.ID,
@@ -1097,7 +1097,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
       before := time.Now()
 
       exitCallback := traceregistry.Enter(ctx, &traceregistry.EventCallback{
-        ID: uuid.NewV4(),
+        ID: uuid.Must(uuid.NewV4()),
         Time: before,
         Name: h.GetQualifiedName(),
         Skipped: skipped,
@@ -1119,7 +1119,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
       }
 
       traceregistry.Add(ctx, traceregistry.EventCallbackComplete{
-        ID: uuid.NewV4(),
+        ID: uuid.Must(uuid.NewV4()),
         Time: time.Now(),
         Name: h.GetQualifiedName(),
         Duration: time.Now().Sub(before),
@@ -1216,7 +1216,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
 
 {{if $Type.HasAudit}}
-    if err := modelutil.RecordAuditEvent(ctx, tx, uuid.NewV4(), time.Now(), uid, euid, "update", "{{$Type.Singular}}", input.ID, changed); err != nil {
+    if err := modelutil.RecordAuditEvent(ctx, tx, uuid.Must(uuid.NewV4()), time.Now(), uid, euid, "update", "{{$Type.Singular}}", input.ID, changed); err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't create audit record")
     }
 {{end}}
