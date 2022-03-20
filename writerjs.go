@@ -56,7 +56,6 @@ import {
 } from 'lib/duckHelpers';
 import type { FetchCache, SearchCache, SearchPageKey } from 'lib/duckHelpers';
 import mergeArrays from 'lib/mergeArrays';
-import { report } from 'lib/report';
 import { Context as SubscriptionsContext } from 'lib/subscriptions';
 
 import { errorsEnsureError } from './errors';
@@ -503,8 +502,6 @@ function batchFetch(id: string, dispatch: (ev: any) => void) {
           });
         },
         (err) => {
-          report('{{$Type.LowerPlural}}Fetch failed', errorsEnsureError(err).message, errorsEnsureError(err).stack, { ids });
-
           dispatch({
             type: 'X/{{Hash $Type.LowerPlural "/FETCH_FAILED_MULTI"}}',
             payload: { ids, time: Date.now(), error: errorsEnsureError(err) },
@@ -648,8 +645,6 @@ export const {{$Type.LowerPlural}}Create = (input: {{$Type.Singular}}CreateInput
           setImmediate(options.after, err);
         }
       }
-
-      report('{{$Type.LowerPlural}}Create failed', errorsEnsureError(err).message, errorsEnsureError(err).stack, { input, options });
     }
   );
 };
@@ -750,8 +745,6 @@ export const {{$Type.LowerPlural}}Update = (input: {{$Type.Singular}}, options?:
                   setImmediate(options.after, err);
                 }
               }
-
-              report('{{$Type.LowerPlural}}Update failed', errorsEnsureError(err).message, errorsEnsureError(err).stack, { input, options });
             }
           ),
         options && typeof options.timeout === 'number'
