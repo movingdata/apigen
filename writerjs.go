@@ -290,106 +290,108 @@ export type Action =
   | { type: 'X/RECORD_PUSH_MULTI', payload: { time: number, changed: { {{$Type.Singular}}?: $ReadOnlyArray<{{$Type.Singular}}> } } };
 
 /** {{$Type.LowerPlural}}Search */
-export const {{$Type.LowerPlural}}Search = (params: {{$Type.Singular}}SearchParams) => (
-  dispatch: (ev: any) => void
-) => {
-  const p = new URLSearchParams();
+export function {{$Type.LowerPlural}}Search(params: {{$Type.Singular}}SearchParams): (dispatch: (ev: any) => void) => void {
+  return function(dispatch: (ev: any) => void): void {
+    const p = new URLSearchParams();
 
-  for (const k of Object.keys(params).sort()) {
-    if (k === 'page' || k === 'pageSize') { continue; }
+    for (const k of Object.keys(params).sort()) {
+      if (k === 'page' || k === 'pageSize') { continue; }
 
-    const v: any = params[k];
+      const v: any = params[k];
 
-    if (Array.isArray(v)) {
-      p.set(k, v.slice().sort().join(','));
-    } else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-      p.set(k, v);
+      if (Array.isArray(v)) {
+        p.set(k, v.slice().sort().join(','));
+      } else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+        p.set(k, v);
+      }
     }
-  }
 
-  let pageSize: number = defaultPageSize;
-  if (typeof params.pageSize === 'number' && !Number.isNaN(params.pageSize)) {
-    pageSize = params.pageSize;
-  }
-
-  if (typeof params.page === 'number' && !Number.isNaN(params.page)) {
-    p.set('offset', (params.page - 1) * pageSize);
-    p.set('limit', pageSize);
-  }
-
-  const key = makeSearchKey(params);
-
-  dispatch({
-    type: 'X/{{Hash $Type.LowerPlural "/SEARCH_BEGIN"}}',
-    payload: { params, key, page: params.page },
-  });
-
-  axios.get('/api/{{$Type.LowerPlural}}?' + p.toString()).then(
-    ({ data: { records, total, time } }: {
-      data: { records: $ReadOnlyArray<{{$Type.Singular}}>, total: number, time: string },
-    }) => void dispatch({
-      type: 'X/{{Hash $Type.LowerPlural "/SEARCH_COMPLETE"}}',
-      payload: { records, total, time: new Date(time).valueOf(), params, key, page: params.page },
-    }),
-    (err: Error) => {
-      dispatch({
-        type: 'X/{{Hash $Type.LowerPlural "/SEARCH_FAILED"}}',
-        payload: {
-          params,
-          key,
-          page: params.page,
-          time: Date.now(),
-          error: errorsEnsureError(err),
-        },
-      });
+    let pageSize: number = defaultPageSize;
+    if (typeof params.pageSize === 'number' && !Number.isNaN(params.pageSize)) {
+      pageSize = params.pageSize;
     }
-  );
-};
+
+    if (typeof params.page === 'number' && !Number.isNaN(params.page)) {
+      p.set('offset', (params.page - 1) * pageSize);
+      p.set('limit', pageSize);
+    }
+
+    const key = makeSearchKey(params);
+
+    dispatch({
+      type: 'X/{{Hash $Type.LowerPlural "/SEARCH_BEGIN"}}',
+      payload: { params, key, page: params.page },
+    });
+
+    axios.get('/api/{{$Type.LowerPlural}}?' + p.toString()).then(
+      ({ data: { records, total, time } }: {
+        data: { records: $ReadOnlyArray<{{$Type.Singular}}>, total: number, time: string },
+      }) => void dispatch({
+        type: 'X/{{Hash $Type.LowerPlural "/SEARCH_COMPLETE"}}',
+        payload: { records, total, time: new Date(time).valueOf(), params, key, page: params.page },
+      }),
+      (err: Error) => {
+        dispatch({
+          type: 'X/{{Hash $Type.LowerPlural "/SEARCH_FAILED"}}',
+          payload: {
+            params,
+            key,
+            page: params.page,
+            time: Date.now(),
+            error: errorsEnsureError(err),
+          },
+        });
+      }
+    );
+  };
+}
 
 /** {{$Type.LowerPlural}}SearchIfRequired will only perform a search if the current results are older than the specified ttl, which is one minute by default */
-export const {{$Type.LowerPlural}}SearchIfRequired = (
+export function {{$Type.LowerPlural}}SearchIfRequired(
   params: {{$Type.Singular}}SearchParams,
   ttl: number = 1000 * 60,
   now: Date = new Date()
-) => (dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }) => {
-  const { {{$Type.LowerPlural}}: { searchCache } } = getState();
+): (dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }) => void {
+  return function(dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }): void {
+    const { {{$Type.LowerPlural}}: { searchCache } } = getState();
 
-  const k = makeSearchKey(params);
+    const k = makeSearchKey(params);
 
-  let refresh = false;
+    let refresh = false;
 
-  const c = searchCache[k];
+    const c = searchCache[k];
 
-  if (c) {
-    const { pages } = c;
+    if (c) {
+      const { pages } = c;
 
-    const page = pages[String(params.page)];
+      const page = pages[String(params.page)];
 
-    if (!page) {
-      refresh = true;
-    } else if (page.time) {
-      if (!page.loading && now.valueOf() - page.time > ttl) {
+      if (!page) {
         refresh = true;
+      } else if (page.time) {
+        if (!page.loading && now.valueOf() - page.time > ttl) {
+          refresh = true;
+        }
+      } else {
+        if (!page.loading) {
+          refresh = true;
+        }
       }
     } else {
-      if (!page.loading) {
-        refresh = true;
-      }
+      refresh = true;
     }
-  } else {
-    refresh = true;
-  }
 
-  if (refresh) {
-    dispatch({{$Type.LowerPlural}}Search(params));
-  }
-};
+    if (refresh) {
+      dispatch({{$Type.LowerPlural}}Search(params));
+    }
+  };
+}
 
 /** {{$Type.LowerPlural}}GetSearchRecords fetches the {{$Type.Singular}} objects related to a specific search query, if available */
-export const {{$Type.LowerPlural}}GetSearchRecords = (
+export function {{$Type.LowerPlural}}GetSearchRecords(
   state: State,
   params: {{$Type.Singular}}SearchParams
-): ?$ReadOnlyArray<{{$Type.Singular}}> => {
+): ?$ReadOnlyArray<{{$Type.Singular}}> {
   const k = makeSearchKey(params);
 
   const c = state.searchCache[k];
@@ -405,13 +407,13 @@ export const {{$Type.LowerPlural}}GetSearchRecords = (
   return p.items.map(id =>
     state.{{$Type.LowerPlural}}.find(e => e.id === id)
   ).reduce((arr, e) => e ? [ ...arr, e ] : arr, ([]: $ReadOnlyArray<{{$Type.Singular}}>));
-};
+}
 
 /** {{$Type.LowerPlural}}GetSearchMeta fetches the metadata related to a specific search query, if available */
-export const {{$Type.LowerPlural}}GetSearchMeta = (
+export function {{$Type.LowerPlural}}GetSearchMeta(
   state: State,
   params: {{$Type.Singular}}SearchParams
-): ?{ time: number, total: number, loading: number } => {
+): ?{ time: number, total: number, loading: number } {
   const k = makeSearchKey(params);
 
   const c = state.searchCache[k];
@@ -422,13 +424,13 @@ export const {{$Type.LowerPlural}}GetSearchMeta = (
   const p = c.pages[String(params.page)];
 
   return { time: c.time, total: c.total, loading: p ? p.loading : 0 };
-};
+}
 
 /** {{$Type.LowerPlural}}GetSearchLoading returns the loading status for a specific search query */
-export const {{$Type.LowerPlural}}GetSearchLoading = (
+export function {{$Type.LowerPlural}}GetSearchLoading(
   state: State,
   params: {{$Type.Singular}}SearchParams
-): boolean => {
+): boolean {
   const k = makeSearchKey(params);
 
   const c = state.searchCache[k];
@@ -442,16 +444,16 @@ export const {{$Type.LowerPlural}}GetSearchLoading = (
   }
 
   return p.loading > 0;
-};
+}
 
 export type {{$Type.Singular}}SearchModifier = (params: {{$Type.Singular}}SearchParams) => {{$Type.Singular}}SearchParams;
 
 /** use{{$Type.Singular}}Search forms a react hook for a specific search query */
-export const use{{$Type.Singular}}Search = (params: {{$Type.Singular}}SearchParams, ...modifiers: Array<{{$Type.Singular}}SearchModifier>): {
+export function use{{$Type.Singular}}Search(params: {{$Type.Singular}}SearchParams, ...modifiers: Array<{{$Type.Singular}}SearchModifier>): {
   meta: ?{ time: number, total: number, loading: number },
   loading: boolean,
   records: $ReadOnlyArray<{{$Type.Singular}}>,
-} => {
+} {
   const modified = modifiers.reduce((p, fn) => fn(p), params);
 
   const dispatch = useDispatch();
@@ -475,7 +477,7 @@ export const use{{$Type.Singular}}Search = (params: {{$Type.Singular}}SearchPara
   }, [manager, ids]);
 
   return { meta, loading, records };
-};
+}
 
 /** pendingFetch is a module-level metadata cache for ongoing fetch operations */ 
 const pendingFetch: {
@@ -522,64 +524,66 @@ function batchFetch(id: string, dispatch: (ev: any) => void) {
 }
 
 /** {{$Type.LowerPlural}}Fetch */
-export const {{$Type.LowerPlural}}Fetch = (id: string) => (
-  dispatch: (ev: any) => void
-) => {
-  if (typeof id !== 'string') { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a string'); }
-  if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a uuid'); }
+export function {{$Type.LowerPlural}}Fetch(id: string): (dispatch: (ev: any) => void) => void {
+  return function(dispatch: (ev: any) => void): void {
+    if (typeof id !== 'string') { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a string'); }
+    if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a uuid'); }
 
-  batchFetch(id, dispatch);
-};
+    batchFetch(id, dispatch);
+  };
+}
 
 /** {{$Type.LowerPlural}}FetchIfRequired will only perform a fetch if the current results are older than the specified ttl, which is one minute by default */
-export const {{$Type.LowerPlural}}FetchIfRequired = (
+export function {{$Type.LowerPlural}}FetchIfRequired(
   id: string,
   ttl: number = 1000 * 60,
   now: Date = new Date()
-) => (dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }) => {
-  const { {{$Type.LowerPlural}}: { fetchCache } } = getState();
+): (dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }) => void {
+  return function(dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }) {
+    const { {{$Type.LowerPlural}}: { fetchCache } } = getState();
 
-  let refresh = false;
+    let refresh = false;
 
-  const c = fetchCache[id];
+    const c = fetchCache[id];
 
-  if (!c) {
-    refresh = true;
-  } else if (c.time) {
-    if (!c.loading && now.valueOf() - c.time > ttl) {
+    if (!c) {
       refresh = true;
+    } else if (c.time) {
+      if (!c.loading && now.valueOf() - c.time > ttl) {
+        refresh = true;
+      }
+    } else {
+      if (!c.loading) {
+        refresh = true;
+      }
     }
-  } else {
-    if (!c.loading) {
-      refresh = true;
-    }
-  }
 
-  if (refresh) {
-    dispatch({{$Type.LowerPlural}}Fetch(id));
-  }
-};
+    if (refresh) {
+      dispatch({{$Type.LowerPlural}}Fetch(id));
+    }
+  };
+}
 
 /** {{$Type.LowerPlural}}GetFetchMeta fetches the metadata related to a specific search query, if available */
-export const {{$Type.LowerPlural}}GetFetchMeta = (state: State, id: string): ?{ time: number, loading: number } => {
+export function {{$Type.LowerPlural}}GetFetchMeta(state: State, id: string): ?{ time: number, loading: number } {
   return state.fetchCache[id];
-};
+}
 
 /** {{$Type.LowerPlural}}GetFetchLoading returns the loading status for a specific search query */
-export const {{$Type.LowerPlural}}GetFetchLoading = (state: State, id: string): boolean => {
+export function {{$Type.LowerPlural}}GetFetchLoading(state: State, id: string): boolean {
   const c = state.fetchCache[id];
   if (!c) {
     return false;
   }
 
   return c.loading > 0;
-};
+}
 
 /** use{{$Type.Singular}}Fetch forms a react hook for a specific fetch query */
-export const use{{$Type.Singular}}Fetch = (id: ?string): {
+export function use{{$Type.Singular}}Fetch(id: ?string): {
   loading: boolean,
   record: ?{{$Type.Singular}},
-} => {
+} {
   const dispatch = useDispatch();
   useEffect(() => { if (id) { dispatch({{$Type.LowerPlural}}FetchIfRequired(id)); } });
   const { loading, record } = useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
@@ -599,235 +603,263 @@ export const use{{$Type.Singular}}Fetch = (id: ?string): {
   }, [manager, id]);
 
   return { loading, record };
-};
+}
 
 {{if $Type.CanCreate}}
 /** {{$Type.LowerPlural}}Create */
-export const {{$Type.LowerPlural}}Create = (input: {{$Type.Singular}}CreateInput, options?: {{$Type.Singular}}CreateOptions) => (
-  dispatch: (ev: any) => void
-) => {
-  dispatch({
-    type: 'X/{{Hash $Type.LowerPlural "/CREATE_BEGIN"}}',
-    payload: {},
-  });
+export function {{$Type.LowerPlural}}Create(
+  input: {{$Type.Singular}}CreateInput,
+  options?: {{$Type.Singular}}CreateOptions
+): (dispatch: (ev: any) => void) => void {
+  return function(dispatch: (ev: any) => void): void {
+    dispatch({
+      type: 'X/{{Hash $Type.LowerPlural "/CREATE_BEGIN"}}',
+      payload: {},
+    });
 
-  axios.post('/api/{{$Type.LowerPlural}}', input).then(
-    ({ data: { time, record, changed } }: {
-      data: {
-        time: string,
-        record: {{$Type.Singular}},
-        changed: { [key: string]: $ReadOnlyArray<any> },
+    axios.post('/api/{{$Type.LowerPlural}}', input).then(
+      ({ data: { time, record, changed } }: {
+        data: {
+          time: string,
+          record: {{$Type.Singular}},
+          changed: { [key: string]: $ReadOnlyArray<any> },
+        },
+      }) => {
+        dispatch({
+          type: 'X/{{Hash $Type.LowerPlural "/CREATE_COMPLETE"}}',
+          payload: { record, options: options || {} },
+        });
+        dispatch({
+          type: 'X/RECORD_PUSH_MULTI',
+          payload: { time: new Date(time).valueOf(), changed },
+        });
+
+        if (options && options.after) {
+          setImmediate(options.after, null, record);
+        }
       },
-    }) => {
-      dispatch({
-        type: 'X/{{Hash $Type.LowerPlural "/CREATE_COMPLETE"}}',
-        payload: { record, options: options || {} },
-      });
-      dispatch({
-        type: 'X/RECORD_PUSH_MULTI',
-        payload: { time: new Date(time).valueOf(), changed },
-      });
+      (err: Error | { response: { data: ErrorResponse } }) => {
+        dispatch({
+          type: 'X/{{Hash $Type.LowerPlural "/CREATE_FAILED"}}',
+          payload: { error: errorsEnsureError(err) },
+        });
 
-      if (options && options.after) {
-        setImmediate(options.after, null, record);
+        if (options && options.after) {
+          if (err && err.response && typeof err.response.data === 'object' && err.response.data !== null) {
+            setImmediate(options.after, new Error(err.response.data.message));
+          } else {
+            setImmediate(options.after, err);
+          }
+        }
       }
-    },
-    (err: Error | { response: { data: ErrorResponse } }) => {
-      dispatch({
-        type: 'X/{{Hash $Type.LowerPlural "/CREATE_FAILED"}}',
-        payload: { error: errorsEnsureError(err) },
-      });
+    );
+  };
+}
 
-      if (options && options.after) {
-        if (err && err.response && typeof err.response.data === 'object' && err.response.data !== null) {
-          setImmediate(options.after, new Error(err.response.data.message));
-        } else {
+/** {{$Type.LowerPlural}}CreateMultiple */
+export function {{$Type.LowerPlural}}CreateMultiple(
+  input: $ReadOnlyArray<{{$Type.Singular}}CreateInput>,
+  options?: {{$Type.Singular}}CreateMultipleOptions
+): (dispatch: (ev: any) => void) => void {
+  return function(dispatch: (ev: any) => void): void {
+    dispatch({
+      type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_BEGIN"}}',
+      payload: { records: input, options: options || {} },
+    });
+
+    axios.post('/api/{{$Type.LowerPlural}}/_multi', { records: input }).then(
+      ({ data: { time, records, changed } }: {
+        data: {
+          time: string,
+          records: $ReadOnlyArray<{{$Type.Singular}}>,
+          changed: { [key: string]: $ReadOnlyArray<any> },
+        },
+      }) => {
+        dispatch({
+          type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_COMPLETE"}}',
+          payload: { records, options: options || {} },
+        });
+        dispatch({
+          type: 'X/RECORD_PUSH_MULTI',
+          payload: { time: new Date(time).valueOf(), changed },
+        });
+
+        if (options && options.after) {
+          setImmediate(options.after, null, records);
+        }
+      },
+      (err: Error) => {
+        dispatch({
+          type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_FAILED"}}',
+          payload: { records: input, options: options || {}, error: errorsEnsureError(err) },
+        });
+
+        if (options && options.after) {
           setImmediate(options.after, err);
         }
       }
-    }
-  );
-};
-
-/** {{$Type.LowerPlural}}CreateMultiple */
-export const {{$Type.LowerPlural}}CreateMultiple = (input: $ReadOnlyArray<{{$Type.Singular}}CreateInput>, options?: {{$Type.Singular}}CreateMultipleOptions) => (dispatch: (ev: any) => void) => {
-  dispatch({
-    type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_BEGIN"}}',
-    payload: { records: input, options: options || {} },
-  });
-
-  axios.post('/api/{{$Type.LowerPlural}}/_multi', { records: input }).then(
-    ({ data: { time, records, changed } }: {
-      data: {
-        time: string,
-        records: $ReadOnlyArray<{{$Type.Singular}}>,
-        changed: { [key: string]: $ReadOnlyArray<any> },
-      },
-    }) => {
-      dispatch({
-        type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_COMPLETE"}}',
-        payload: { records, options: options || {} },
-      });
-      dispatch({
-        type: 'X/RECORD_PUSH_MULTI',
-        payload: { time: new Date(time).valueOf(), changed },
-      });
-
-      if (options && options.after) {
-        setImmediate(options.after, null, records);
-      }
-    },
-    (err: Error) => {
-      dispatch({
-        type: 'X/{{Hash $Type.LowerPlural "/CREATE_MULTIPLE_FAILED"}}',
-        payload: { records: input, options: options || {}, error: errorsEnsureError(err) },
-      });
-
-      if (options && options.after) {
-        setImmediate(options.after, err);
-      }
-    }
-  );
-};
+    );
+  };
+}
 {{end}}
 
 {{if $Type.CanUpdate}}
 /** {{$Type.LowerPlural}}Update */
-export const {{$Type.LowerPlural}}Update = (input: {{$Type.Singular}}, options?: {{$Type.Singular}}UpdateOptions) => (dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) => {
-  const previous = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => e.id === input.id);
-  if (!previous) {
-    return;
-  }
+export function {{$Type.LowerPlural}}Update(
+  input: {{$Type.Singular}},
+  options?: {{$Type.Singular}}UpdateOptions
+): (dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) => void {
+  return function(dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) {
+    const previous = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => e.id === input.id);
+    if (!previous) {
+      return;
+    }
 
-  const timeoutHandle = getState().{{$Type.LowerPlural}}.timeouts[input.id];
-  if (timeoutHandle) {
-    clearTimeout(timeoutHandle);
-    dispatch({ type: 'X/{{Hash $Type.LowerPlural "/UPDATE_CANCEL"}}', payload: { id: input.id } });
-  }
+    const timeoutHandle = getState().{{$Type.LowerPlural}}.timeouts[input.id];
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      dispatch({ type: 'X/{{Hash $Type.LowerPlural "/UPDATE_CANCEL"}}', payload: { id: input.id } });
+    }
 
-  dispatch({
-    type: 'X/{{Hash $Type.LowerPlural "/UPDATE_BEGIN"}}',
-    payload: {
-      record: input,
-      timeout: setTimeout(
-        () =>
-          void axios.put('/api/{{$Type.LowerPlural}}/' + input.id, input).then(
-            ({ data: { time, record, changed } }: {
-              data: {
-                time: string,
-                record: {{$Type.Singular}},
-                changed: { [key: string]: $ReadOnlyArray<any> },
+    dispatch({
+      type: 'X/{{Hash $Type.LowerPlural "/UPDATE_BEGIN"}}',
+      payload: {
+        record: input,
+        timeout: setTimeout(
+          () =>
+            void axios.put('/api/{{$Type.LowerPlural}}/' + input.id, input).then(
+              ({ data: { time, record, changed } }: {
+                data: {
+                  time: string,
+                  record: {{$Type.Singular}},
+                  changed: { [key: string]: $ReadOnlyArray<any> },
+                },
+              }) => {
+                dispatch({
+                  type: 'X/{{Hash $Type.LowerPlural "/UPDATE_COMPLETE"}}',
+                  payload: { record, options: options || {} },
+                });
+                dispatch({
+                  type: 'X/RECORD_PUSH_MULTI',
+                  payload: { time: new Date(time).valueOf(), changed },
+                });
+
+                if (options && options.after) {
+                  setImmediate(options.after, null, record);
+                }
               },
-            }) => {
-              dispatch({
-                type: 'X/{{Hash $Type.LowerPlural "/UPDATE_COMPLETE"}}',
-                payload: { record, options: options || {} },
-              });
-              dispatch({
-                type: 'X/RECORD_PUSH_MULTI',
-                payload: { time: new Date(time).valueOf(), changed },
-              });
+              (err: Error | { response: { data: ErrorResponse } }) => {
+                dispatch({
+                  type: 'X/{{Hash $Type.LowerPlural "/UPDATE_FAILED"}}',
+                  payload: { record: previous, error: errorsEnsureError(err) },
+                });
 
-              if (options && options.after) {
-                setImmediate(options.after, null, record);
+                if (options && options.after) {
+                  if (err && err.response && typeof err.response.data === 'object' && err.response.data !== null) {
+                    setImmediate(options.after, new Error(err.response.data.message));
+                  } else {
+                    setImmediate(options.after, err);
+                  }
+                }
               }
-            },
-            (err: Error | { response: { data: ErrorResponse } }) => {
-              dispatch({
-                type: 'X/{{Hash $Type.LowerPlural "/UPDATE_FAILED"}}',
-                payload: { record: previous, error: errorsEnsureError(err) },
-              });
+            ),
+          options && typeof options.timeout === 'number'
+            ? options.timeout
+            : 1000
+        ),
+      },
+    });
+  };
+}
 
-              if (options && options.after) {
-                if (err && err.response && typeof err.response.data === 'object' && err.response.data !== null) {
-                  setImmediate(options.after, new Error(err.response.data.message));
-                } else {
+/** {{$Type.LowerPlural}}UpdateMultiple */
+export function {{$Type.LowerPlural}}UpdateMultiple(
+  input: $ReadOnlyArray<{{$Type.Singular}}>,
+  options?: {{$Type.Singular}}UpdateMultipleOptions
+): (dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) => void {
+  return function(dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) {
+    const {{$Type.LowerPlural}} = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}};
+
+    const previous = input.map(({ id }) => {{$Type.LowerPlural}}.find(e => e.id === id));
+    if (!previous.length) {
+      return;
+    }
+
+    const timeoutHandle = getState().{{$Type.LowerPlural}}.timeouts[input.map(e => e.id).sort().join(',')];
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      dispatch({ type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_CANCEL"}}', payload: { ids: input.map(e => e.id).sort().join(',') } });
+    }
+
+    dispatch({
+      type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_BEGIN"}}',
+      payload: {
+        records: input,
+        timeout: setTimeout(
+          () =>
+            void axios.put('/api/{{$Type.LowerPlural}}/_multi', { records: input }).then(
+              ({ data: { time, records, changed } }: {
+                data: {
+                  time: string,
+                  records: $ReadOnlyArray<{{$Type.Singular}}>,
+                  changed: { [key: string]: $ReadOnlyArray<any> },
+                },
+              }) => {
+                dispatch({
+                  type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_COMPLETE"}}',
+                  payload: { records, options: options || {} },
+                });
+                dispatch({
+                  type: 'X/RECORD_PUSH_MULTI',
+                  payload: { time: new Date(time).valueOf(), changed },
+                });
+
+                if (options && options.after) {
+                  setImmediate(options.after, null, records);
+                }
+              },
+              (err: Error) => {
+                dispatch({
+                  type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_FAILED"}}',
+                  payload: { record: previous, error: errorsEnsureError(err) },
+                });
+
+                if (options && options.after) {
                   setImmediate(options.after, err);
                 }
               }
-            }
-          ),
-        options && typeof options.timeout === 'number'
-          ? options.timeout
-          : 1000
-      ),
-    },
-  });
-};
-
-/** {{$Type.LowerPlural}}UpdateMultiple */
-export const {{$Type.LowerPlural}}UpdateMultiple = (input: $ReadOnlyArray<{{$Type.Singular}}>, options?: {{$Type.Singular}}UpdateMultipleOptions) => (dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) => {
-  const {{$Type.LowerPlural}} = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}};
-
-  const previous = input.map(({ id }) => {{$Type.LowerPlural}}.find(e => e.id === id));
-  if (!previous.length) {
-    return;
-  }
-
-  const timeoutHandle = getState().{{$Type.LowerPlural}}.timeouts[input.map(e => e.id).sort().join(',')];
-  if (timeoutHandle) {
-    clearTimeout(timeoutHandle);
-    dispatch({ type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_CANCEL"}}', payload: { ids: input.map(e => e.id).sort().join(',') } });
-  }
-
-  dispatch({
-    type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_BEGIN"}}',
-    payload: {
-      records: input,
-      timeout: setTimeout(
-        () =>
-          void axios.put('/api/{{$Type.LowerPlural}}/_multi', { records: input }).then(
-            ({ data: { time, records, changed } }: {
-              data: {
-                time: string,
-                records: $ReadOnlyArray<{{$Type.Singular}}>,
-                changed: { [key: string]: $ReadOnlyArray<any> },
-              },
-            }) => {
-              dispatch({
-                type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_COMPLETE"}}',
-                payload: { records, options: options || {} },
-              });
-              dispatch({
-                type: 'X/RECORD_PUSH_MULTI',
-                payload: { time: new Date(time).valueOf(), changed },
-              });
-
-              if (options && options.after) {
-                setImmediate(options.after, null, records);
-              }
-            },
-            (err: Error) => {
-              dispatch({
-                type: 'X/{{Hash $Type.LowerPlural "/UPDATE_MULTIPLE_FAILED"}}',
-                payload: { record: previous, error: errorsEnsureError(err) },
-              });
-
-              if (options && options.after) {
-                setImmediate(options.after, err);
-              }
-            }
-          ),
-        options && typeof options.timeout === 'number'
-          ? options.timeout
-          : 1000
-      ),
-    },
-  });
-};
+            ),
+          options && typeof options.timeout === 'number'
+            ? options.timeout
+            : 1000
+        ),
+      },
+    });
+  };
+}
 {{end}}
 
 /** {{$Type.LowerPlural}}Reset resets the whole {{$Type.Singular}} state */
-export const {{$Type.LowerPlural}}Reset = () => ({
+export function {{$Type.LowerPlural}}Reset(): {
   type: 'X/{{Hash $Type.LowerPlural "/RESET"}}',
   payload: {},
-});
+} {
+  return {
+    type: 'X/{{Hash $Type.LowerPlural "/RESET"}}',
+    payload: {},
+  };
+}
 
 /** {{$Type.LowerPlural}}InvalidateCache invalidates the caches for {{$Type.Singular}} */
-export const {{$Type.LowerPlural}}InvalidateCache = () => ({
+export function {{$Type.LowerPlural}}InvalidateCache(): {
   type: 'X/{{Hash $Type.LowerPlural "/INVALIDATE_CACHE"}}',
   payload: {},
-});
+} {
+  return {
+    type: 'X/{{Hash $Type.LowerPlural "/INVALIDATE_CACHE"}}',
+    payload: {},
+  };
+}
 
 const defaultState: State = {
   loading: 0,
