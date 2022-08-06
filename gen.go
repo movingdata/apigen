@@ -597,6 +597,10 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				filterOptions = [][]string{{"="}, {"!="}}
 			case "time.Time", "*time.Time", "civil.Date", "*civil.Date":
 				filterOptions = [][]string{{"="}, {"!="}, {"<"}, {"<="}, {">"}, {">="}}
+
+				if isPointer {
+					filterOptions = append(filterOptions, []string{"is_null_or_less_than"}, []string{"is_null_or_greater_than"})
+				}
 			}
 
 			if isPointer {
@@ -630,12 +634,18 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			case "<=":
 				jsName = jsName + "Lte"
 				goName = goName + "Lte"
+			case "is_null_or_less_than":
+				jsName = jsName + "IsNullOrLessThan"
+				goName = goName + "IsNullOrLessThan"
 			case ">":
 				jsName = jsName + "Gt"
 				goName = goName + "Gt"
 			case ">=":
 				jsName = jsName + "Gte"
 				goName = goName + "Gte"
+			case "is_null_or_greater_than":
+				jsName = jsName + "IsNullOrGreaterThan"
+				goName = goName + "IsNullOrGreaterThan"
 			case "in":
 				jsName = jsName + "In"
 				goName = goName + "In"
