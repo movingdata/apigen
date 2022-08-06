@@ -141,23 +141,16 @@ func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mct
     return
   }
 
-  a := accept.Parse(r.Header.Get("accept"))
+  rw.Header().Set("content-type", "application/json")
+  rw.WriteHeader(http.StatusOK)
 
-  f, _ := a.Negotiate("application/json")
+  enc := json.NewEncoder(rw)
+  if r.URL.Query().Get("_pretty") != "" {
+    enc.SetIndent("", "  ")
+  }
 
-  switch f {
-  default:
-    rw.Header().Set("content-type", "application/json")
-    rw.WriteHeader(http.StatusOK)
-
-    enc := json.NewEncoder(rw)
-    if r.URL.Query().Get("_pretty") != "" {
-      enc.SetIndent("", "  ")
-    }
-
-    if err := enc.Encode(v); err != nil {
-      panic(err)
-    }
+  if err := enc.Encode(v); err != nil {
+    panic(err)
   }
 }
 
@@ -294,23 +287,16 @@ func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, 
     panic(err)
   }
 
-  a := accept.Parse(r.Header.Get("accept"))
+  rw.Header().Set("content-type", "application/json")
+  rw.WriteHeader(http.StatusOK)
 
-  f, _ := a.Negotiate("application/json")
+  enc := json.NewEncoder(rw)
+  if r.URL.Query().Get("_pretty") != "" {
+    enc.SetIndent("", "  ")
+  }
 
-  switch f {
-  default:
-    rw.Header().Set("content-type", "application/json")
-    rw.WriteHeader(http.StatusOK)
-
-    enc := json.NewEncoder(rw)
-    if r.URL.Query().Get("_pretty") != "" {
-      enc.SetIndent("", "  ")
-    }
-
-    if err := enc.Encode(v); err != nil {
-      panic(err)
-    }
+  if err := enc.Encode(v); err != nil {
+    panic(err)
   }
 }
 
@@ -853,23 +839,16 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
     panic(err)
   }
 
-  a := accept.Parse(r.Header.Get("accept"))
+  rw.Header().Set("content-type", "application/json")
+  rw.WriteHeader(http.StatusOK)
 
-  f, _ := a.Negotiate("application/json")
+  enc := json.NewEncoder(rw)
+  if r.URL.Query().Get("_pretty") != "" {
+    enc.SetIndent("", "  ")
+  }
 
-  switch f {
-  default:
-    rw.Header().Set("content-type", "application/json")
-    rw.WriteHeader(http.StatusOK)
-
-    enc := json.NewEncoder(rw)
-    if r.URL.Query().Get("_pretty") != "" {
-      enc.SetIndent("", "  ")
-    }
-
-    if err := enc.Encode(result); err != nil {
-      panic(err)
-    }
+  if err := enc.Encode(result); err != nil {
+    panic(err)
   }
 }
 
@@ -935,23 +914,16 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
     panic(err)
   }
 
-  a := accept.Parse(r.Header.Get("accept"))
+  rw.Header().Set("content-type", "application/json")
+  rw.WriteHeader(http.StatusOK)
 
-  f, _ := a.Negotiate("application/json")
+  enc := json.NewEncoder(rw)
+  if r.URL.Query().Get("_pretty") != "" {
+    enc.SetIndent("", "  ")
+  }
 
-  switch f {
-  default:
-    rw.Header().Set("content-type", "application/json")
-    rw.WriteHeader(http.StatusOK)
-
-    enc := json.NewEncoder(rw)
-    if r.URL.Query().Get("_pretty") != "" {
-      enc.SetIndent("", "  ")
-    }
-
-    if err := enc.Encode(output); err != nil {
-      panic(err)
-    }
+  if err := enc.Encode(output); err != nil {
+    panic(err)
   }
 }
 {{end}}
@@ -1298,23 +1270,16 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
     panic(err)
   }
 
-  a := accept.Parse(r.Header.Get("accept"))
+  rw.Header().Set("content-type", "application/json")
+  rw.WriteHeader(http.StatusOK)
 
-  f, _ := a.Negotiate("application/json")
+  enc := json.NewEncoder(rw)
+  if r.URL.Query().Get("_pretty") != "" {
+    enc.SetIndent("", "  ")
+  }
 
-  switch f {
-  default:
-    rw.Header().Set("content-type", "application/json")
-    rw.WriteHeader(http.StatusOK)
-
-    enc := json.NewEncoder(rw)
-    if r.URL.Query().Get("_pretty") != "" {
-      enc.SetIndent("", "  ")
-    }
-
-    if err := enc.Encode(result); err != nil {
-      panic(err)
-    }
+  if err := enc.Encode(result); err != nil {
+    panic(err)
   }
 }
 
@@ -1380,23 +1345,16 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
     panic(err)
   }
 
-  a := accept.Parse(r.Header.Get("accept"))
+  rw.Header().Set("content-type", "application/json")
+  rw.WriteHeader(http.StatusOK)
 
-  f, _ := a.Negotiate("application/json")
+  enc := json.NewEncoder(rw)
+  if r.URL.Query().Get("_pretty") != "" {
+    enc.SetIndent("", "  ")
+  }
 
-  switch f {
-  default:
-    rw.Header().Set("content-type", "application/json")
-    rw.WriteHeader(http.StatusOK)
-
-    enc := json.NewEncoder(rw)
-    if r.URL.Query().Get("_pretty") != "" {
-      enc.SetIndent("", "  ")
-    }
-
-    if err := enc.Encode(output); err != nil {
-      panic(err)
-    }
+  if err := enc.Encode(output); err != nil {
+    panic(err)
   }
 }
 {{end}}
