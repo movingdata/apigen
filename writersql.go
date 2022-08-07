@@ -249,7 +249,7 @@ func {{$Root.Name}}SQLFindOne(ctx context.Context, db modelutil.RowQueryerContex
 {{if $Root.HasFindOneByID}}
 // {{$Root.Name}}SQLFindOneByID gets a single {{$Root.Name}} record by its ID from the database
 func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID) (*{{$Root.Name}}, error) {
-	if !modelutil.Truthy(id) {
+	if id == uuid.Nil {
 		return nil, errors.Errorf("{{$Root.Name}}SQLFindOneByID: id argument was empty")
 	}
 
@@ -303,7 +303,7 @@ func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db modelutil.QueryerCont
 {{if (and $Root.CanCreate $Root.HasCreate)}}
 // {{$Root.Name}}SQLCreate creates a single {{$Root.Name}} record in the database
 func {{$Root.Name}}SQLCreate(ctx context.Context, db modelutil.ExecerContext, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
-	if !modelutil.Truthy(m.ID) {
+	if m.ID == uuid.Nil {
 		return errors.Errorf("{{$Root.Name}}SQLCreate: ID field was empty")
 	}
 
@@ -342,7 +342,7 @@ func {{$Root.Name}}SQLCreate(ctx context.Context, db modelutil.ExecerContext, us
 {{if (and $Root.CanUpdate $Root.HasSave)}}
 // {{$Root.Name}}SQLSave updates a single {{$Root.Name}} record in the database
 func {{$Root.Name}}SQLSave(ctx context.Context, db interface { modelutil.RowQueryerContext; modelutil.ExecerContext }, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
-	if !modelutil.Truthy(m.ID) {
+	if m.ID == uuid.Nil {
 		return errors.Errorf("{{$Root.Name}}SQLSave: ID field was empty")
 	}
 

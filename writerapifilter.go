@@ -115,7 +115,17 @@ func (p *FilterParameters) AddFilters(q *sqlbuilder.SelectStatement) *sqlbuilder
   a := apifilter.BuildFilters({{$Type.Singular | LC}}schema.Table, p)
 
 {{range $Filter := $Type.SpecialFilters}}
-  if !modelutil.IsNil(p.{{$Filter.GoName}}) {
+{{- if eq $Filter.GoType "*uuid.UUID"}}
+  if p.{{$Filter.GoName}} != nil {
+{{- else if eq $Filter.GoType "*string"}}
+  if p.{{$Filter.GoName}} != nil {
+{{- else if eq $Filter.GoType "*int"}}
+  if p.{{$Filter.GoName}} != nil {
+{{- else if eq $Filter.GoType "*time.Time"}}
+  if p.{{$Filter.GoName}} != nil {
+{{- else}}
+  if !modelutil.IsNil(p.{{$Filter.GoName}}) { // "{{$Filter.GoType}}"
+{{- end}}
     a = append(a, specialFilter{{$Filter.GoName}}(*p.{{$Filter.GoName}}))
   }
 {{- end}}

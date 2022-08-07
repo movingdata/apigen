@@ -507,7 +507,7 @@ func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singul
 }
 
 func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
-  if !modelutil.Truthy(input.ID) {
+  if input.ID == uuid.Nil {
     return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
   }
 
@@ -539,7 +539,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 
 {{range $Field := $Type.Fields}}
 {{- if not (eq $Field.Sequence "")}}
-  if !modelutil.Truthy(input.{{$Field.GoName}}) {
+  if input.{{$Field.GoName}} == 0 {
     if err := tx.QueryRowContext(ctx, "select nextval('{{$Field.Sequence}}')").Scan(&input.{{$Field.GoName}}); err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get sequence value for field \"{{$Field.APIName}}\" from sequence \"{{$Field.Sequence}}\"")
     }
@@ -946,7 +946,7 @@ func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singula
 }
 
 func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
-  if !modelutil.Truthy(input.ID) {
+  if input.ID == uuid.Nil {
     return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
 
@@ -1367,10 +1367,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id uuid.UUID, createdA
 }
 
 func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
-  if !modelutil.Truthy(id) {
+  if id == uuid.Nil {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
   }
-  if !modelutil.Truthy(createdAt) {
+  if createdAt.IsZero() {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
   }
 
@@ -1399,10 +1399,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatorID(id, creatorID uuid.UUI
 }
 
 func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, creatorID uuid.UUID) error {
-  if !modelutil.Truthy(id) {
+  if id == uuid.Nil {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
   }
-  if !modelutil.Truthy(creatorID) {
+  if creatorID == uuid.Nil {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
   }
 
@@ -1431,10 +1431,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id uuid.UUID, updatedA
 }
 
 func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
-  if !modelutil.Truthy(id) {
+  if id == uuid.Nil {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
   }
-  if !modelutil.Truthy(updatedAt) {
+  if updatedAt.IsZero() {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
   }
 
@@ -1463,10 +1463,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdaterID(id, updaterID uuid.UUI
 }
 
 func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, updaterID uuid.UUID) error {
-  if !modelutil.Truthy(id) {
+  if id == uuid.Nil {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
   }
-  if !modelutil.Truthy(updaterID) {
+  if updaterID == uuid.Nil {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
   }
 
