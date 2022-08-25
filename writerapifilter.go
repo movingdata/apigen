@@ -9,14 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
-
-	"fknsrs.biz/p/apitypes"
 )
 
 type APIFilterWriter struct {
 	dir    string
 	pkgs   []string
-	models []*apitypes.Model
+	models []*Model
 }
 
 func NewAPIFilterWriter(dir string) *APIFilterWriter { return &APIFilterWriter{dir: dir} }

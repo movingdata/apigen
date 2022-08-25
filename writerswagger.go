@@ -97,10 +97,6 @@ func (w *SwaggerWriter) Write(wr io.Writer, typeName string, namedType *types.Na
 
 		var fieldNames []string
 		for _, field := range model.Fields {
-			if field.NoOrder {
-				continue
-			}
-
 			fieldNames = append(fieldNames, field.APIName, "-"+field.APIName)
 		}
 

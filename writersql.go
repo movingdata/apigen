@@ -40,18 +40,6 @@ var sqlIgnoreInput = map[string]bool{
 	"updater_id": true,
 }
 
-var sqlTypes = map[string]string{
-	"bool":                           "boolean",
-	"encoding/json.RawMessage":       "json",
-	"float64":                        "double precision",
-	"github.com/satori/go.uuid.UUID": "uuid",
-	"int":                            "integer",
-	"int64":                          "integer",
-	"fknsrs.biz/p/civil.Date":        "date",
-	"string":                         "text",
-	"time.Time":                      "timestamp with time zone",
-}
-
 func (w *SQLWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
 	d, err := getSQLTemplateData(typeName, namedType, structType)
 	if err != nil {
@@ -110,9 +98,31 @@ func getSQLTemplateData(typeName string, namedType *types.Named, structType *typ
 			sqlName = ucls.String(fld.Name())
 		}
 
-		sqlType, ok := sqlTypes[strings.TrimPrefix(ft.String(), "movingdata.com/p/wbi/vendor/")]
-		if !ok {
-			return nil, errors.Errorf("can't determine sql type for go type %q", ft)
+		var goType, sqlType string
+
+		switch ft := ft.(type) {
+		case *types.Basic:
+			goType = ft.String()
+			sqlType = sqlTypes[goType]
+		case *types.Named:
+			goType = ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
+			sqlType = sqlTypes[goType]
+		default:
+			return nil, errors.Errorf("unrecognised field type %s (%s)", ft.String(), fld.Name())
+		}
+
+		if goType == "" {
+			return nil, errors.Errorf("couldn't determine go type for %s (%s)", ft, fld.Name())
+		}
+		if sqlType == "" {
+			return nil, errors.Errorf("couldn't determine sql type for %s (%s)", ft, fld.Name())
+		}
+
+		if isPointer {
+			goType = "*" + goType
+		}
+		if isSlice {
+			goType = "[]" + goType
 		}
 
 		if a, ok := sqlArgs["table"]; ok && len(a) > 0 {
@@ -152,6 +162,7 @@ func getSQLTemplateData(typeName string, namedType *types.Named, structType *typ
 
 		f := sqlField{
 			GoName:  fld.Name(),
+			GoType:  goType,
 			SQLName: sqlName,
 			SQLType: sqlType,
 			Array:   isSlice,
@@ -210,6 +221,7 @@ type sqlTemplateData struct {
 
 type sqlField struct {
 	GoName  string
+	GoType  string
 	SQLName string
 	SQLType string
 	Array   bool
@@ -368,7 +380,7 @@ func {{$Root.Name}}SQLSave(ctx context.Context, db interface { modelutil.RowQuer
 	}
 
 {{- range $Field := $Root.UpdateFields}}
-	if !modelutil.Compare(m.{{$Field.GoName}}, p.{{$Field.GoName}}) {
+	if {{ (NotEqual (Join "m." $Field.GoName) $Field.GoType (Join "p." $Field.GoName) $Field.GoType) }} {
 		uc[{{$Root.Name | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(m.{{$Field.GoName}}){{else}}m.{{$Field.GoName}}{{end}})
 	}
 {{- end}}

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"text/template"
 
-	"fknsrs.biz/p/apitypes"
 	"github.com/danverbraganza/varcaser/varcaser"
 	"github.com/grsmv/inflect"
 	"github.com/pkg/errors"
@@ -146,14 +145,23 @@ func singularFor(s string) (string, string) {
 var jsTypes = map[string]string{
 	"string":          "string",
 	"int":             "number",
-	"int64":           "number",
 	"float64":         "number",
 	"bool":            "boolean",
 	"uuid.UUID":       "string",
-	"decimal.Decimal": "string",
 	"time.Time":       "string",
 	"civil.Date":      "string",
 	"json.RawMessage": "any",
+}
+
+var sqlTypes = map[string]string{
+	"string":          "text",
+	"int":             "integer",
+	"float64":         "double precision",
+	"bool":            "boolean",
+	"uuid.UUID":       "uuid",
+	"time.Time":       "timestamp with time zone",
+	"civil.Date":      "date",
+	"json.RawMessage": "json",
 }
 
 var ignoreInput = map[string]bool{
@@ -246,9 +254,164 @@ var tplFunc = template.FuncMap{
 	"UnPtr": func(s string) string {
 		return strings.TrimPrefix(s, "*")
 	},
+	"Join": func(s1, s2 string) string {
+		return s1 + s2
+	},
+	"Equal": func(arg1, type1, arg2, type2 string) string {
+		switch {
+		case type1 == "bool" && type2 == "bool":
+			return fmt.Sprintf("%s == %s", arg1, arg2)
+		case type1 == "string" && type2 == "string":
+			return fmt.Sprintf("%s == %s", arg1, arg2)
+		case type1 == "*string" && type2 == "*string":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && *%s == *%s))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]string" && type2 == "[]string":
+			return fmt.Sprintf("modelutil.EqualStringSlice(%s, %s)", arg1, arg2)
+		case type1 == "int" && type2 == "int":
+			return fmt.Sprintf("%s == %s", arg1, arg2)
+		case type1 == "*int" && type2 == "*int":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && *%s == *%s))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "float64" && type2 == "float64":
+			return fmt.Sprintf("%s == %s", arg1, arg2)
+		case type1 == "*float64" && type2 == "*float64":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && *%s == *%s))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "uuid.UUID" && type2 == "uuid.UUID":
+			return fmt.Sprintf("%s == %s", arg1, arg2)
+		case type1 == "*uuid.UUID" && type2 == "*uuid.UUID":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && *%s == *%s))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]uuid.UUID" && type2 == "[]uuid.UUID":
+			return fmt.Sprintf("modelutil.EqualUUIDSlice(%s, %s)", arg1, arg2)
+		case type1 == "time.Time" && type2 == "time.Time":
+			return fmt.Sprintf("%s.Equal(%s)", arg1, arg2)
+		case type1 == "*time.Time" && type2 == "*time.Time":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && %s.Equal(*%s)))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "civil.Date" && type2 == "civil.Date":
+			return fmt.Sprintf("%s.On(%s)", arg1, arg2)
+		case type1 == "*civil.Date" && type2 == "*civil.Date":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && %s.On(*%s)))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "json.RawMessage" && type2 == "json.RawMessage":
+			return fmt.Sprintf("modelutil.EqualJSON(%s, %s)", arg1, arg2)
+		default:
+			fmt.Printf("UNKNOWN TYPES %q vs %q\n", type1, type2)
+			return fmt.Sprintf("%q == %q", arg1+"<UNKNOWN_TYPE "+type1+">", arg2+"<UNKNOWN_TYPE "+type2+">")
+		}
+	},
+	"NotEqual": func(arg1, type1, arg2, type2 string) string {
+		switch {
+		case type1 == "bool" && type2 == "bool":
+			return fmt.Sprintf("%s != %s", arg1, arg2)
+		case type1 == "string" && type2 == "string":
+			return fmt.Sprintf("%s != %s", arg1, arg2)
+		case type1 == "*string" && type2 == "*string":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && *%s != *%s))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]string" && type2 == "[]string":
+			return fmt.Sprintf("!modelutil.EqualStringSlice(%s, %s)", arg1, arg2)
+		case type1 == "int" && type2 == "int":
+			return fmt.Sprintf("%s != %s", arg1, arg2)
+		case type1 == "*int" && type2 == "*int":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && *%s != *%s))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "float64" && type2 == "float64":
+			return fmt.Sprintf("%s != %s", arg1, arg2)
+		case type1 == "*float64" && type2 == "*float64":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && *%s != *%s))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "uuid.UUID" && type2 == "uuid.UUID":
+			return fmt.Sprintf("%s != %s", arg1, arg2)
+		case type1 == "*uuid.UUID" && type2 == "*uuid.UUID":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && *%s != *%s))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]uuid.UUID" && type2 == "[]uuid.UUID":
+			return fmt.Sprintf("!modelutil.EqualUUIDSlice(%s, %s)", arg1, arg2)
+		case type1 == "time.Time" && type2 == "time.Time":
+			return fmt.Sprintf("!%s.Equal(%s)", arg1, arg2)
+		case type1 == "*time.Time" && type2 == "*time.Time":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && !%s.Equal(*%s)))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "civil.Date" && type2 == "civil.Date":
+			return fmt.Sprintf("!%s.On(%s)", arg1, arg2)
+		case type1 == "*civil.Date" && type2 == "*civil.Date":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && !%s.On(*%s)))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "json.RawMessage" && type2 == "json.RawMessage":
+			return fmt.Sprintf("!modelutil.EqualJSON(%s, %s)", arg1, arg2)
+		default:
+			fmt.Printf("UNKNOWN TYPES %q vs %q\n", type1, type2)
+			return fmt.Sprintf("%q == %q", arg1+"<UNKNOWN_TYPE "+type1+">", arg2+"<UNKNOWN_TYPE "+type2+">")
+		}
+	},
 }
 
-func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*apitypes.Model, error) {
+type Model struct {
+	HTTPSearch     bool
+	HTTPGet        bool
+	HTTPCreate     bool
+	HTTPUpdate     bool
+	Singular       string
+	Plural         string
+	LowerPlural    string
+	Fields         []Field
+	SpecialOrders  []SpecialOrder
+	SpecialFilters []Filter
+	CanCreate      bool
+	CanUpdate      bool
+	CanHide        bool
+	HasVersion     bool
+	HasCreatedAt   bool
+	HasUpdatedAt   bool
+	HasCreatorID   bool
+	HasUpdaterID   bool
+	HasAudit       bool
+	HasUserFilter  bool
+}
+
+type Field struct {
+	IsNull bool
+	Array  bool
+
+	GoName string
+	GoType string
+
+	SQLName string
+	SQLType string
+
+	APIName  string
+	JSType   string
+	JSONType map[string]interface{}
+
+	Filters []Filter
+
+	IgnoreInput    bool
+	OmitEmpty      bool
+	Enum           Enums
+	Sequence       string
+	SequencePrefix string
+}
+
+type Enum struct {
+	Value  string
+	Label  string
+	GoName string
+}
+
+type Enums []Enum
+
+func (e Enums) First() Enum {
+	return e[0]
+}
+
+type SpecialOrder struct {
+	GoName  string
+	APIName string
+}
+
+type Filter struct {
+	Operator     string
+	Name         string
+	GoName       string
+	GoType       string
+	JSType       string
+	JSONType     string
+	TestOperator string
+	TestType     string
+}
+
+func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*Model, error) {
 	r, err := regexp.Compile("[A-Z]+[a-z]+")
 	if err != nil {
 		return nil, err
@@ -262,9 +425,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 	var (
 		lowerPlural    = uclcc.String(inflect.Camelize(strings.Join(words, "_")))
-		fields         []apitypes.Field
-		specialOrders  []apitypes.SpecialOrder
-		specialFilters []apitypes.Filter
+		fields         []Field
+		specialOrders  []SpecialOrder
+		specialFilters []Filter
 		canCreate      = false
 		canUpdate      = false
 		canHide        = false
@@ -344,11 +507,11 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			httpUpdate = false
 		}
 
-		var enums apitypes.Enums
+		var enums Enums
 		if s := getTagIndex(structType, i, "enum"); s != "" {
 			a := strings.Split(s[1:], string(s[0]))
 
-			enums = make(apitypes.Enums, len(a))
+			enums = make(Enums, len(a))
 
 			for i, s := range a {
 				b := strings.SplitN(s, ":", 3)
@@ -370,7 +533,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				}
 				b[1] = label
 
-				enums[i] = apitypes.Enum{b[0], b[1], b[2]}
+				enums[i] = Enum{b[0], b[1], b[2]}
 			}
 		}
 
@@ -387,8 +550,6 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			isPointer = true
 			ft = p.Elem()
 		}
-
-		_, noOrder := apiTagOptions["noorder"]
 
 		_, omitEmpty := apiTagOptions["omitempty"]
 
@@ -421,29 +582,30 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			}
 		}
 
-		gf := apitypes.Field{
+		gf := Field{
 			GoName:         f.Name(),
 			APIName:        apiName,
 			SQLName:        sqlName,
 			IgnoreInput:    ignoreInput[apiName],
-			NoOrder:        noOrder,
 			OmitEmpty:      omitEmpty,
 			Enum:           enums,
 			Sequence:       sequence,
 			SequencePrefix: sequencePrefix,
 		}
 
-		var goType, jsType, jsonType string
+		var goType, jsType, jsonType, sqlType string
 
 		switch ft := ft.(type) {
 		case *types.Basic:
 			goType = ft.String()
 			jsType = jsTypes[ft.String()]
 			jsonType = jsTypes[ft.String()]
+			sqlType = sqlTypes[ft.String()]
 		case *types.Named:
 			goType = ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
 			jsType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 			jsonType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
+			sqlType = sqlTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 		default:
 			return nil, errors.Errorf("unrecognised field type %s (%s)", ft.String(), f.Name())
 		}
@@ -453,6 +615,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		}
 		if jsType == "" {
 			return nil, errors.Errorf("couldn't determine js type for %s (%s)", ft, f.Name())
+		}
+		if sqlType == "" {
+			return nil, errors.Errorf("couldn't determine sql type for %s (%s)", ft, f.Name())
 		}
 
 		var jsEnums []string
@@ -486,20 +651,21 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		gf.GoType = goType
 		gf.JSType = jsType
 		gf.JSONType = map[string]interface{}{"type": jsonType}
+		gf.SQLType = sqlType
 
 		if len(jsonEnums) > 0 {
 			gf.JSONType["enum"] = jsonEnums
 		}
 
 		if isPointer {
+			gf.IsNull = true
 			gf.GoType = "*" + gf.GoType
 			gf.JSType = "?" + gf.JSType
-			gf.IsNull = true
 		}
 		if isSlice {
+			gf.Array = true
 			gf.GoType = "[]" + gf.GoType
 			gf.JSType = "$ReadOnlyArray<" + gf.JSType + ">"
-			gf.Array = true
 			gf.JSONType = map[string]interface{}{
 				"type":  "array",
 				"items": gf.JSONType,
@@ -510,29 +676,8 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			hasUserFilter = true
 		}
 
-		if a := apiTagOptions["userMask"]; len(a) > 0 {
-			if len(a[0]) >= 1 {
-				gf.UserMask = typeName + "UserMask" + a[0][0]
-			} else {
-				gf.UserMask = typeName + "UserMask" + f.Name()
-			}
-
-			if len(a[0]) >= 2 {
-				gf.UserMaskValue = typeName + "UserMaskValue" + a[0][1]
-			} else {
-				gf.UserMaskValue = "sharedMask_"
-				if gf.IsNull {
-					gf.UserMaskValue += "null_"
-				}
-				if gf.Array {
-					gf.UserMaskValue += "array_"
-				}
-				gf.UserMaskValue += strings.Replace(goType, ".", "_", -1)
-			}
-		}
-
 		for _, opts := range apiTagOptions["specialOrder"] {
-			o := apitypes.SpecialOrder{APIName: apiName, GoName: f.Name()}
+			o := SpecialOrder{APIName: apiName, GoName: f.Name()}
 
 			if len(opts) > 0 && opts[0] != "" {
 				o.APIName = opts[0]
@@ -555,7 +700,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				name = opts[1]
 			}
 
-			f := apitypes.Filter{
+			f := Filter{
 				Name:         name,
 				GoName:       goName,
 				JSType:       jsType,
@@ -589,9 +734,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				filterOptions = [][]string{{"="}, {"!="}, {"in"}, {"not_in"}}
 			case "string", "*string":
 				filterOptions = [][]string{{"="}, {"!="}, {"@@"}, {"contains"}, {"prefix"}}
-			case "int", "*int", "float64", "*float64", "decimal.Decimal", "*decimal.Decimal":
+			case "int", "*int", "float64", "*float64":
 				filterOptions = [][]string{{"="}, {"!="}, {"<"}, {"<="}, {">"}, {">="}}
-			case "[]uuid.UUID", "[]string", "[]int", "[]decimal.Decimal":
+			case "[]uuid.UUID", "[]string", "[]int":
 				filterOptions = [][]string{{"@>"}, {"!@>"}, {"<@"}, {"!<@"}, {"&&"}, {"!&&"}}
 			case "bool", "*bool":
 				filterOptions = [][]string{{"="}, {"!="}}
@@ -695,7 +840,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				goName = opts[1]
 			}
 
-			gff := apitypes.Filter{
+			gff := Filter{
 				Operator:     operator,
 				Name:         jsName,
 				GoName:       goName,
@@ -732,7 +877,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		}
 	}
 
-	return &apitypes.Model{
+	return &Model{
 		HTTPSearch:     httpSearch,
 		HTTPGet:        httpGet,
 		HTTPCreate:     httpCreate,

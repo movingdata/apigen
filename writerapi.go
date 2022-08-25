@@ -32,7 +32,6 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"github.com/timewasted/go-accept-headers",
 		"movingdata.com/p/wbi/internal/apihelpers",
 		"movingdata.com/p/wbi/internal/apifilter",
-		"movingdata.com/p/wbi/internal/apitypes",
 		"movingdata.com/p/wbi/internal/changeregistry",
 		"movingdata.com/p/wbi/internal/cookiesession",
 		"movingdata.com/p/wbi/internal/modelutil",
@@ -113,12 +112,6 @@ func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContex
 
     return nil, errors.Wrap(err, "{{$Type.Singular}}APIGet: couldn't perform query")
   }
-
-{{range $i, $Field := $Type.Fields}}
-{{if $Field.Masked}}
-  v.{{$Field.GoName}} = strings.Repeat("*", len(v.{{$Field.GoName}}))
-{{end}}
-{{end}}
 
   return &v, nil
 }
@@ -201,12 +194,6 @@ func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContex
     if err := rows.Scan({{range $i, $Field := $Type.Fields}}{{if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}} /* {{$i}} */, {{end}}); err != nil {
       return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't scan result row")
     }
-
-{{range $i, $Field := $Type.Fields}}
-{{if $Field.Masked}}
-    m.{{$Field.GoName}} = strings.Repeat("*", len(m.{{$Field.GoName}}))
-{{end}}
-{{end}}
 
     a = append(a, &m)
   }
@@ -1114,7 +1101,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 
 {{range $Field := $Type.Fields}}
 {{- if not $Field.IgnoreInput}}
-  if !modelutil.Compare(input.{{$Field.GoName}}, p.{{$Field.GoName}}) {{if $Field.Masked}}&& !modelutil.Compare(input.{{$Field.GoName}}, strings.Repeat("*", len(input.{{$Field.GoName}}))){{end}} {
+  if {{ (NotEqual (Join "input." $Field.GoName) $Field.GoType (Join "p." $Field.GoName) $Field.GoType) }} {
     skip = false
 
 {{- if $Field.Enum}}
@@ -1144,7 +1131,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     input.Version = input.Version + 1
     uc[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
 {{- if $Type.HasAudit}}
-    if !modelutil.Compare(input.Version, p.Version) {
+    if input.Version != p.Version {
       changed["Version"] = []interface{}{p.Version, input.Version}
     }
 {{- end}}
@@ -1153,7 +1140,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     input.UpdatedAt = now
     uc[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
 {{- if $Type.HasAudit}}
-    if !modelutil.Compare(input.UpdatedAt, p.UpdatedAt) {
+    if !input.UpdatedAt.Equal(p.UpdatedAt) {
       changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
     }
 {{- end}}
@@ -1162,7 +1149,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
     input.UpdaterID = euid
     uc[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
 {{- if $Type.HasAudit}}
-    if !modelutil.Compare(input.UpdaterID, p.UpdaterID) {
+    if input.UpdaterID != p.UpdaterID {
       changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
     }
 {{- end}}
