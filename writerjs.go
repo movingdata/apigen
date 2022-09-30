@@ -307,12 +307,14 @@ export function {{$Type.LowerPlural}}Search(params: {{$Type.Singular}}SearchPara
     }
 
     let pageSize: number = defaultPageSize;
-    if (typeof params.pageSize === 'number' && !Number.isNaN(params.pageSize)) {
-      pageSize = params.pageSize;
+    const inputPageSize = params.pageSize;
+    if (typeof inputPageSize === 'number' && !Number.isNaN(inputPageSize)) {
+      pageSize = inputPageSize;
     }
 
-    if (typeof params.page === 'number' && !Number.isNaN(params.page)) {
-      p.set('offset', (params.page - 1) * pageSize);
+    const inputPage = params.page;
+    if (typeof inputPage === 'number' && !Number.isNaN(inputPage)) {
+      p.set('offset', (inputPage - 1) * pageSize);
       p.set('limit', pageSize);
     }
 
