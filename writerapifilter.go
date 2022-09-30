@@ -167,10 +167,8 @@ func (p *SearchParameters) AddLimits(q *sqlbuilder.SelectStatement) *sqlbuilder.
 
       switch s {
 {{- range $Field := $Type.Fields}}
-{{- if not $Field.NoOrder}}
       case "{{$Field.APIName}}":
         fld = {{$Type.Singular | LC}}schema.Column{{$Field.GoName}}
-{{- end}}
 {{- end}}
 {{- range $Field := $Type.SpecialOrders}}
       case "{{$Field.APIName}}":
