@@ -30,6 +30,7 @@ func (w SchemaWriter) PackageName(typeName string, _ *types.Named, _ *types.Stru
 
 func (SchemaWriter) Imports(typeName string, namedType *types.Named, structType *types.Struct) []string {
 	return []string{
+		"movingdata.com/p/wbi/internal/apitypes",
 		"fknsrs.biz/p/sqlbuilder",
 	}
 }

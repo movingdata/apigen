@@ -257,6 +257,19 @@ var tplFunc = template.FuncMap{
 	"Join": func(s1, s2 string) string {
 		return s1 + s2
 	},
+	"EqualStrings": func(s1, s2 string) bool {
+		return s1 == s2
+	},
+	"FormatTemplate": func(t string) string {
+		switch t {
+		case "uuid.UUID":
+			return "%q"
+		case "int":
+			return "%d"
+		default:
+			return "%#v"
+		}
+	},
 	"Equal": func(arg1, type1, arg2, type2 string) string {
 		switch {
 		case type1 == "bool" && type2 == "bool":
@@ -346,11 +359,11 @@ type Model struct {
 	Plural         string
 	LowerPlural    string
 	Fields         []Field
+	IDField        *Field
 	SpecialOrders  []SpecialOrder
 	SpecialFilters []Filter
 	CanCreate      bool
 	CanUpdate      bool
-	CanHide        bool
 	HasVersion     bool
 	HasCreatedAt   bool
 	HasUpdatedAt   bool
@@ -381,6 +394,18 @@ type Field struct {
 	Enum           Enums
 	Sequence       string
 	SequencePrefix string
+}
+
+type Fields []Field
+
+func (f Fields) GetByGoName(name string) *Field {
+	for _, e := range f {
+		if e.GoName == name {
+			return &e
+		}
+	}
+
+	return nil
 }
 
 type Enum struct {
@@ -425,12 +450,13 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 	var (
 		lowerPlural    = uclcc.String(inflect.Camelize(strings.Join(words, "_")))
-		fields         []Field
+		fields         Fields
 		specialOrders  []SpecialOrder
 		specialFilters []Filter
+		noCreate       = false
 		canCreate      = false
+		noUpdate       = false
 		canUpdate      = false
-		canHide        = false
 		hasVersion     = false
 		hasCreatedAt   = false
 		hasUpdatedAt   = false
@@ -502,9 +528,11 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		}
 		if _, ok := apiTagOptions["nocreate"]; ok {
 			httpCreate = false
+			noCreate = true
 		}
 		if _, ok := apiTagOptions["noupdate"]; ok {
 			httpUpdate = false
+			noUpdate = true
 		}
 
 		var enums Enums
@@ -886,11 +914,11 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		Plural:         inflect.Camelize(strings.Join(words, "_")),
 		LowerPlural:    lowerPlural,
 		Fields:         fields,
+		IDField:        fields.GetByGoName("ID"),
 		SpecialOrders:  specialOrders,
 		SpecialFilters: specialFilters,
-		CanCreate:      canCreate,
-		CanUpdate:      canUpdate,
-		CanHide:        canHide,
+		CanCreate:      canCreate && !noCreate,
+		CanUpdate:      canUpdate && !noUpdate,
 		HasVersion:     hasVersion,
 		HasCreatedAt:   hasCreatedAt,
 		HasUpdatedAt:   hasUpdatedAt,

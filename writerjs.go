@@ -886,7 +886,7 @@ export default function reducer(state: State = defaultState, action: Action): St
     case 'X/{{Hash $Type.LowerPlural "/SEARCH_COMPLETE"}}': {
       const { params, key, time, total, page, records } = action.payload;
 
-      const ids = records.map((e) => e.id);
+      const ids = records.map((e) => typeof e.id === 'string' ? e.id : String(e.id));
 
       return {
         ...state,

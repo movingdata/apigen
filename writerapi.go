@@ -25,12 +25,9 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"fknsrs.biz/p/civil",
 		"fknsrs.biz/p/sqlbuilder",
 		"github.com/gorilla/mux",
-		"github.com/gorilla/schema",
 		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
-		"github.com/shopspring/decimal",
 		"github.com/timewasted/go-accept-headers",
-		"movingdata.com/p/wbi/internal/apihelpers",
 		"movingdata.com/p/wbi/internal/apifilter",
 		"movingdata.com/p/wbi/internal/changeregistry",
 		"movingdata.com/p/wbi/internal/cookiesession",
@@ -54,8 +51,13 @@ var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse
 {{$Type := .}}
 
 func init() {
-  modelutil.RegisterFinder("{{$Type.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (interface{}, error) {
-    v, err := {{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
+  modelutil.RegisterFinder("{{$Type.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id interface{}, uid, euid *uuid.UUID) (interface{}, error) {
+    idValue, ok := id.({{$Type.IDField.GoType}})
+    if !ok {
+      return nil, errors.Errorf("{{$Type.Singular}}: id should be {{$Type.IDField.GoType}}; was instead %T", id)
+    }
+
+    v, err := {{$Type.Singular}}APIGet(ctx, db, idValue, uid, euid)
     if err != nil {
       return nil, err
     }
@@ -82,7 +84,7 @@ func (jsctx *JSContext) {{$Type.Singular}}EnumLabel{{$Field.GoName}}(v string) s
 {{- end}}
 {{end}}
 
-func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} {
+func (jsctx *JSContext) {{$Type.Singular}}Get(id {{$Type.IDField.GoType}}) *{{$Type.Singular}} {
   v, err := {{$Type.Singular}}APIGet(jsctx.ctx, jsctx.tx, id, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
@@ -90,7 +92,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Get(id uuid.UUID) *{{$Type.Singular}} 
   return v
 }
 
-func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContext, id {{$Type.IDField.GoType}}, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
   qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
 
 {{- if $Type.HasUserFilter}}
@@ -119,10 +121,18 @@ func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContex
 func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   vars := mux.Vars(r)
 
+{{if (EqualStrings $Type.IDField.GoType "int")}}
+  idNumber, err := strconv.ParseInt(vars["id"], 10, 64)
+  if err != nil {
+    panic(err)
+  }
+  id := int(idNumber)
+{{else}}
   id, err := uuid.FromString(vars["id"])
   if err != nil {
     panic(err)
   }
+{{end}}
 
   v, err := {{$Type.Singular}}APIGet(r.Context(), db, id, uid, euid)
   if err != nil {
@@ -130,7 +140,7 @@ func {{$Type.Singular}}APIHandleGet(rw http.ResponseWriter, r *http.Request, mct
   }
 
   if v == nil {
-    http.Error(rw, fmt.Sprintf("{{$Type.Singular}} with id %q not found", id.String()), http.StatusNotFound)
+    http.Error(rw, fmt.Sprintf("{{$Type.Singular}} with id {{FormatTemplate $Type.IDField.GoType}} not found", id), http.StatusNotFound)
     return
   }
 
@@ -478,7 +488,7 @@ func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bo
 
 {{if $Type.CanCreate}}
 func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}Create#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
+  v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, fmt.Sprintf("JS#{{$Type.Singular}}Create#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -486,7 +496,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$T
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singular}}, options modelutil.APIOptions) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}CreateWithOptions#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
+  v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, fmt.Sprintf("JS#{{$Type.Singular}}CreateWithOptions#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, &options)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -494,13 +504,13 @@ func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singul
 }
 
 func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
-  if input.ID == uuid.Nil {
+  if input.ID == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
   }
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
   ctx, log := modelutil.WithCallbackHistoryLog(ctx)
-  ctx = modelutil.WithPathEntry(ctx, "API#{{$Type.Singular}}Create#"+input.ID.String())
+  ctx = modelutil.WithPathEntry(ctx, fmt.Sprintf("API#{{$Type.Singular}}Create#{{FormatTemplate $Type.IDField.GoType}}", input.ID))
 
   ic := sqlbuilder.InsertColumns{}
 
@@ -663,7 +673,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
           log.Add("{{$Type.Singular}}", h.GetName(), input.ID)
         }
 
-        if err := h.Func(modelutil.WithPathEntry(ctx, "CB#"+h.GetQualifiedName()+"#"+input.ID.String()), tx, uid, euid, options, &c, input); err != nil {
+        if err := h.Func(modelutil.WithPathEntry(ctx, fmt.Sprintf("CB#"+h.GetQualifiedName()+"#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), tx, uid, euid, options, &c, input); err != nil {
           return nil, errors.Wrapf(err, "{{$Type.Singular}}APICreate: BeforeSave callback %s for %s failed", h.Name, input.ID)
         }
       }
@@ -776,7 +786,7 @@ func {{$Type.Singular}}APIHandleCreate(rw http.ResponseWriter, r *http.Request, 
     }
   }
 
-  ctx := modelutil.WithPathEntry(r.Context(), "HTTP#{{$Type.Singular}}Create#"+input.ID.String())
+  ctx := modelutil.WithPathEntry(r.Context(), fmt.Sprintf("HTTP#{{$Type.Singular}}Create#{{FormatTemplate $Type.IDField.GoType}}", input.ID))
 
   tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
   if err != nil {
@@ -917,7 +927,7 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
 
 {{if $Type.CanUpdate}}
 func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}Save#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
+  v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, fmt.Sprintf("JS#{{$Type.Singular}}Save#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -925,7 +935,7 @@ func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Ty
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singular}}, options *modelutil.APIOptions) *{{$Type.Singular}} {
-  v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, "JS#{{$Type.Singular}}SaveWithOptions#"+input.ID.String()), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
+  v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, fmt.Sprintf("JS#{{$Type.Singular}}SaveWithOptions#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, options)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
@@ -933,13 +943,13 @@ func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singula
 }
 
 func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
-  if input.ID == uuid.Nil {
+  if input.ID == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
   ctx, log := modelutil.WithCallbackHistoryLog(ctx)
-  ctx = modelutil.WithPathEntry(ctx, "API#{{$Type.Singular}}Save#"+input.ID.String())
+  ctx = modelutil.WithPathEntry(ctx, fmt.Sprintf("API#{{$Type.Singular}}Save#{{FormatTemplate $Type.IDField.GoType}}", input.ID))
 
   p, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
@@ -1072,7 +1082,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
           log.Add("{{$Type.Singular}}", h.GetName(), input.ID)
         }
 
-        if err := h.Func(modelutil.WithPathEntry(ctx, "CB#"+h.GetQualifiedName()+"#"+input.ID.String()), tx, uid, euid, options, &c, input); err != nil {
+        if err := h.Func(modelutil.WithPathEntry(ctx, fmt.Sprintf("CB#"+h.GetQualifiedName()+"#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), tx, uid, euid, options, &c, input); err != nil {
           return nil, errors.Wrapf(err, "{{$Type.Singular}}APISave: BeforeSave callback %s for %s failed", h.Name, input.ID)
         }
       }
@@ -1207,7 +1217,7 @@ func {{$Type.Singular}}APIHandleSave(rw http.ResponseWriter, r *http.Request, mc
     }
   }
 
-  ctx := modelutil.WithPathEntry(r.Context(), "HTTP#{{$Type.Singular}}Save#"+input.ID.String())
+  ctx := modelutil.WithPathEntry(r.Context(), fmt.Sprintf("HTTP#{{$Type.Singular}}Save#{{FormatTemplate $Type.IDField.GoType}}", input.ID))
 
   tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
   if err != nil {
@@ -1347,14 +1357,14 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
 {{end}}
 
 {{if $Type.HasCreatedAt}}
-func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id uuid.UUID, createdAt time.Time) {
+func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id {{$Type.IDField.GoType}}, createdAt time.Time) {
   if err := {{$Type.Singular}}APIChangeCreatedAt(jsctx.ctx, jsctx.mctx, jsctx.tx, id, createdAt); err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
 }
 
-func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id uuid.UUID, createdAt time.Time) error {
-  if id == uuid.Nil {
+func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id {{$Type.IDField.GoType}}, createdAt time.Time) error {
+  if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
   }
   if createdAt.IsZero() {
@@ -1386,7 +1396,7 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatorID(id, creatorID uuid.UUI
 }
 
 func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, creatorID uuid.UUID) error {
-  if id == uuid.Nil {
+  if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
   }
   if creatorID == uuid.Nil {
@@ -1411,14 +1421,14 @@ func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.M
 {{end}}
 
 {{if $Type.HasUpdatedAt}}
-func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id uuid.UUID, updatedAt time.Time) {
+func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id {{$Type.IDField.GoType}}, updatedAt time.Time) {
   if err := {{$Type.Singular}}APIChangeUpdatedAt(jsctx.ctx, jsctx.mctx, jsctx.tx, id, updatedAt); err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
 }
 
-func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id uuid.UUID, updatedAt time.Time) error {
-  if id == uuid.Nil {
+func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id {{$Type.IDField.GoType}}, updatedAt time.Time) error {
+  if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
   }
   if updatedAt.IsZero() {
@@ -1450,7 +1460,7 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdaterID(id, updaterID uuid.UUI
 }
 
 func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, updaterID uuid.UUID) error {
-  if id == uuid.Nil {
+  if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
   }
   if updaterID == uuid.Nil {
