@@ -216,7 +216,7 @@ export type Action =
         error: ErrorResponse,
       },
     }
-  | { type: 'X/{{Hash $Type.LowerPlural "/FETCH_BEGIN"}}', payload: { id: string } }
+  | { type: 'X/{{Hash $Type.LowerPlural "/FETCH_BEGIN"}}', payload: { id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}} } }
   | {
       type: 'X/{{Hash $Type.LowerPlural "/FETCH_COMPLETE_MULTI"}}',
       payload: { ids: $ReadOnlyArray<string>, time: number, records: $ReadOnlyArray<{{$Type.Singular}}> },
@@ -256,7 +256,7 @@ export type Action =
       type: 'X/{{Hash $Type.LowerPlural "/UPDATE_BEGIN"}}',
       payload: { record: {{$Type.Singular}}, timeout: number },
     }
-  | { type: 'X/{{Hash $Type.LowerPlural "/UPDATE_CANCEL"}}', payload: { id: string } }
+  | { type: 'X/{{Hash $Type.LowerPlural "/UPDATE_CANCEL"}}', payload: { id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}} } }
   | {
       type: 'X/{{Hash $Type.LowerPlural "/UPDATE_COMPLETE"}}',
       payload: { record: {{$Type.Singular}}, options: {{$Type.Singular}}UpdateOptions },
@@ -407,7 +407,7 @@ export function {{$Type.LowerPlural}}GetSearchRecords(
   }
 
   return p.items.map(id =>
-    state.{{$Type.LowerPlural}}.find(e => e.id === id)
+    state.{{$Type.LowerPlural}}.find(e => String(e.id) === String(id))
   ).reduce((arr, e) => e ? [ ...arr, e ] : arr, ([]: $ReadOnlyArray<{{$Type.Singular}}>));
 }
 
@@ -484,13 +484,13 @@ export function use{{$Type.Singular}}Search(params: {{$Type.Singular}}SearchPara
 /** pendingFetch is a module-level metadata cache for ongoing fetch operations */ 
 const pendingFetch: {
   timeout: ?TimeoutID,
-  ids: $ReadOnlyArray<string>,
+  ids: $ReadOnlyArray<{{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}}>,
 } = {
   timeout: null,
   ids: [],
 };
 
-function batchFetch(id: string, dispatch: (ev: any) => void) {
+function batchFetch(id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}}, dispatch: (ev: any) => void) {
   if (pendingFetch.timeout === null) {
     pendingFetch.timeout = setTimeout(() => {
       const { ids } = pendingFetch;
@@ -526,10 +526,16 @@ function batchFetch(id: string, dispatch: (ev: any) => void) {
 }
 
 /** {{$Type.LowerPlural}}Fetch */
-export function {{$Type.LowerPlural}}Fetch(id: string): (dispatch: (ev: any) => void) => void {
+export function {{$Type.LowerPlural}}Fetch(id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}}): (dispatch: (ev: any) => void) => void {
   return function(dispatch: (ev: any) => void): void {
+{{if (EqualStrings $Type.IDField.JSType "number")}}
+    if (typeof id !== 'number') { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a number'); }
+    if (Number.isNaN(id)) { throw new Error('{{$Type.LowerPlural}}Fetch: id can not be NaN'); }
+    if (id < 0) { throw new Error('{{$Type.LowerPlural}}Fetch: id must be zero or greater'); }
+{{else}}
     if (typeof id !== 'string') { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a string'); }
     if (!id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) { throw new Error('{{$Type.LowerPlural}}Fetch: id must be a uuid'); }
+{{end}}
 
     batchFetch(id, dispatch);
   };
@@ -537,7 +543,7 @@ export function {{$Type.LowerPlural}}Fetch(id: string): (dispatch: (ev: any) => 
 
 /** {{$Type.LowerPlural}}FetchIfRequired will only perform a fetch if the current results are older than the specified ttl, which is one minute by default */
 export function {{$Type.LowerPlural}}FetchIfRequired(
-  id: string,
+  id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}},
   ttl: number = 1000 * 60,
   now: Date = new Date()
 ): (dispatch: (ev: any) => void, getState: () => { {{$Type.LowerPlural}}: State }) => void {
@@ -546,7 +552,7 @@ export function {{$Type.LowerPlural}}FetchIfRequired(
 
     let refresh = false;
 
-    const c = fetchCache[id];
+    const c = fetchCache[String(id)];
 
     if (!c) {
       refresh = true;
@@ -567,13 +573,13 @@ export function {{$Type.LowerPlural}}FetchIfRequired(
 }
 
 /** {{$Type.LowerPlural}}GetFetchMeta fetches the metadata related to a specific search query, if available */
-export function {{$Type.LowerPlural}}GetFetchMeta(state: State, id: string): ?{ time: number, loading: number } {
-  return state.fetchCache[id];
+export function {{$Type.LowerPlural}}GetFetchMeta(state: State, id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}}): ?{ time: number, loading: number } {
+  return state.fetchCache[String(id)];
 }
 
 /** {{$Type.LowerPlural}}GetFetchLoading returns the loading status for a specific search query */
-export function {{$Type.LowerPlural}}GetFetchLoading(state: State, id: string): boolean {
-  const c = state.fetchCache[id];
+export function {{$Type.LowerPlural}}GetFetchLoading(state: State, id: {{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}}): boolean {
+  const c = state.fetchCache[String(id)];
   if (!c) {
     return false;
   }
@@ -582,7 +588,7 @@ export function {{$Type.LowerPlural}}GetFetchLoading(state: State, id: string): 
 }
 
 /** use{{$Type.Singular}}Fetch forms a react hook for a specific fetch query */
-export function use{{$Type.Singular}}Fetch(id: ?string): {
+export function use{{$Type.Singular}}Fetch(id: ?{{if (EqualStrings $Type.IDField.JSType "number")}}number{{else}}string{{end}}): {
   loading: boolean,
   record: ?{{$Type.Singular}},
 } {
@@ -590,7 +596,7 @@ export function use{{$Type.Singular}}Fetch(id: ?string): {
   useEffect(() => { if (id) { dispatch({{$Type.LowerPlural}}FetchIfRequired(id)); } });
   const { loading, record } = useSelector(({ {{$Type.LowerPlural}} }: { {{$Type.LowerPlural}}: State }) => ({
     loading: id ? {{$Type.LowerPlural}}GetFetchLoading({{$Type.LowerPlural}}, id) : false,
-    record: id ? {{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => e.id === id) : null,
+    record: id ? {{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => String(e.id) === String(id)) : null,
   }));
 
   const manager = useContext(SubscriptionsContext);
@@ -712,7 +718,7 @@ export function {{$Type.LowerPlural}}Update(
   options?: {{$Type.Singular}}UpdateOptions
 ): (dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) => void {
   return function(dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) {
-    const previous = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => e.id === input.id);
+    const previous = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}}.find(e => String(e.id) === String(input.id));
     if (!previous) {
       return;
     }
@@ -782,7 +788,7 @@ export function {{$Type.LowerPlural}}UpdateMultiple(
   return function(dispatch: (ev: any) => void, getState: () => ({ {{$Type.LowerPlural}}: State })) {
     const {{$Type.LowerPlural}} = getState().{{$Type.LowerPlural}}.{{$Type.LowerPlural}};
 
-    const previous = input.map(({ id }) => {{$Type.LowerPlural}}.find(e => e.id === id));
+    const previous = input.map(({ id }) => {{$Type.LowerPlural}}.find(e => String(e.id) === String(id)));
     if (!previous.length) {
       return;
     }
@@ -1143,7 +1149,7 @@ export default function reducer(state: State = defaultState, action: Action): St
       }
 
       const ids = pairs.filter(([id, version]) => {
-        const v = state.{{$Type.LowerPlural}}.find(e => e.id === id);
+        const v = state.{{$Type.LowerPlural}}.find(e => String(e.id) === String(id));
         return v && v.version < version;
       }).map(([id]) => id);
 
