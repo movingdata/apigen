@@ -1,12 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"go/types"
 	"io"
 	"strings"
 	"text/template"
-
-	"github.com/pkg/errors"
 )
 
 type SQLWriter struct{ Dir string }
@@ -25,7 +24,6 @@ func (SQLWriter) Imports(typeName string, namedType *types.Named, structType *ty
 		"database/sql",
 		"time",
 		"fknsrs.biz/p/sqlbuilder",
-		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
 		"movingdata.com/p/wbi/internal/modelutil",
 		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
@@ -108,14 +106,14 @@ func getSQLTemplateData(typeName string, namedType *types.Named, structType *typ
 			goType = ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
 			sqlType = sqlTypes[goType]
 		default:
-			return nil, errors.Errorf("unrecognised field type %s (%s)", ft.String(), fld.Name())
+			return nil, fmt.Errorf("unrecognised field type %s (%s)", ft.String(), fld.Name())
 		}
 
 		if goType == "" {
-			return nil, errors.Errorf("couldn't determine go type for %s (%s)", ft, fld.Name())
+			return nil, fmt.Errorf("couldn't determine go type for %s (%s)", ft, fld.Name())
 		}
 		if sqlType == "" {
-			return nil, errors.Errorf("couldn't determine sql type for %s (%s)", ft, fld.Name())
+			return nil, fmt.Errorf("couldn't determine sql type for %s (%s)", ft, fld.Name())
 		}
 
 		if isPointer {
@@ -242,7 +240,7 @@ func {{$Root.Name}}SQLFindOne(ctx context.Context, db modelutil.RowQueryerContex
 
 	qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
 	if err != nil {
-		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindOne: couldn't generate query")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindOne: couldn't generate query: %w", err)
 	}
 
 	var m {{$Root.Name}}
@@ -251,7 +249,7 @@ func {{$Root.Name}}SQLFindOne(ctx context.Context, db modelutil.RowQueryerContex
 			return nil, nil
 		}
 
-		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindOne: couldn't perform query")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindOne: couldn't perform query: %w", err)
 	}
 
 	return &m, nil
@@ -262,12 +260,12 @@ func {{$Root.Name}}SQLFindOne(ctx context.Context, db modelutil.RowQueryerContex
 // {{$Root.Name}}SQLFindOneByID gets a single {{$Root.Name}} record by its ID from the database
 func {{$Root.Name}}SQLFindOneByID(ctx context.Context, db modelutil.RowQueryerContext, id uuid.UUID) (*{{$Root.Name}}, error) {
 	if id == uuid.Nil {
-		return nil, errors.Errorf("{{$Root.Name}}SQLFindOneByID: id argument was empty")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindOneByID: id argument was empty")
 	}
 
 	v, err := {{$Root.Name}}SQLFindOne(ctx, db, func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement { return q.AndWhere(sqlbuilder.Eq({{$Root.Name | LC}}schema.ColumnID, sqlbuilder.Bind(id))) })
 	if err != nil {
-		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindOneByID: couldn't get model")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindOneByID: couldn't get model: %w", err)
 	}
 
 	return v, nil
@@ -285,12 +283,12 @@ func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db modelutil.QueryerCont
 
 	qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
 	if err != nil {
-		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindMultiple: couldn't generate query")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindMultiple: couldn't generate query: %w", err)
 	}
 
 	rows, err := db.QueryContext(ctx, qs, qv...)
 	if err != nil {
-		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindMultiple: couldn't perform query")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindMultiple: couldn't perform query: %w", err)
 	}
 	defer rows.Close()
 
@@ -298,14 +296,14 @@ func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db modelutil.QueryerCont
 	for rows.Next() {
 		var m {{$Root.Name}}
 		if err := rows.Scan({{range $i, $Field := $Root.Fields}}&m.{{$Field.GoName}}, {{end}}); err != nil {
-			return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindMultiple: couldn't scan row")
+			return nil, fmt.Errorf("{{$Root.Name}}SQLFindMultiple: couldn't scan row: %w", err)
 		}
 
 		a = append(a, m)
 	}
 
 	if err := rows.Close(); err != nil {
-		return nil, errors.Wrap(err, "{{$Root.Name}}SQLFindMultiple: couldn't close row set")
+		return nil, fmt.Errorf("{{$Root.Name}}SQLFindMultiple: couldn't close row set: %w", err)
 	}
 
 	return a, nil
@@ -316,7 +314,7 @@ func {{$Root.Name}}SQLFindMultiple(ctx context.Context, db modelutil.QueryerCont
 // {{$Root.Name}}SQLCreate creates a single {{$Root.Name}} record in the database
 func {{$Root.Name}}SQLCreate(ctx context.Context, db modelutil.ExecerContext, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
 	if m.ID == uuid.Nil {
-		return errors.Errorf("{{$Root.Name}}SQLCreate: ID field was empty")
+		return fmt.Errorf("{{$Root.Name}}SQLCreate: ID field was empty")
 	}
 
 	qb := sqlbuilder.Insert().Table({{$Root.Name | LC}}schema.Table).Columns(sqlbuilder.InsertColumns{
@@ -340,11 +338,11 @@ func {{$Root.Name}}SQLCreate(ctx context.Context, db modelutil.ExecerContext, us
 
 	qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
 	if err != nil {
-		return errors.Wrap(err, "{{$Root.Name}}SQLCreate: couldn't generate query")
+		return fmt.Errorf("{{$Root.Name}}SQLCreate: couldn't generate query: %w", err)
 	}
 
 	if _, err := db.ExecContext(ctx, qs, qv...); err != nil {
-		return errors.Wrap(err, "{{$Root.Name}}SQLCreate: couldn't perform query")
+		return fmt.Errorf("{{$Root.Name}}SQLCreate: couldn't perform query: %w", err)
 	}
 
 	return nil
@@ -355,12 +353,12 @@ func {{$Root.Name}}SQLCreate(ctx context.Context, db modelutil.ExecerContext, us
 // {{$Root.Name}}SQLSave updates a single {{$Root.Name}} record in the database
 func {{$Root.Name}}SQLSave(ctx context.Context, db interface { modelutil.RowQueryerContext; modelutil.ExecerContext }, userID uuid.UUID, now time.Time, m *{{$Root.Name}}) error {
 	if m.ID == uuid.Nil {
-		return errors.Errorf("{{$Root.Name}}SQLSave: ID field was empty")
+		return fmt.Errorf("{{$Root.Name}}SQLSave: ID field was empty")
 	}
 
 	p, err := {{$Root.Name}}SQLFindOneByID(ctx, db, m.ID)
 	if err != nil {
-		return errors.Wrap(err, "{{$Root.Name}}SQLSave: couldn't fetch previous state")
+		return fmt.Errorf("{{$Root.Name}}SQLSave: couldn't fetch previous state: %w", err)
 	}
 
 {{if $Root.HasUpdatedAt -}}
@@ -389,11 +387,11 @@ func {{$Root.Name}}SQLSave(ctx context.Context, db interface { modelutil.RowQuer
 
 	qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
 	if err != nil {
-		return errors.Wrap(err, "{{$Root.Name}}SQLSave: couldn't generate query")
+		return fmt.Errorf("{{$Root.Name}}SQLSave: couldn't generate query: %w", err)
 	}
 
 	if _, err := db.ExecContext(ctx, qs, qv...); err != nil {
-		return errors.Wrap(err, "{{$Root.Name}}SQLSave: couldn't update record")
+		return fmt.Errorf("{{$Root.Name}}SQLSave: couldn't update record: %w", err)
 	}
 
 	return nil

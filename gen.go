@@ -15,7 +15,6 @@ import (
 
 	"github.com/danverbraganza/varcaser/varcaser"
 	"github.com/grsmv/inflect"
-	"github.com/pkg/errors"
 )
 
 type writer interface {
@@ -557,7 +556,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 				label, err := url.QueryUnescape(b[1])
 				if err != nil {
-					return nil, errors.Wrapf(err, "bad percent-encoding in enum; field=%v.%v", namedType.String(), f.Name())
+					return nil, fmt.Errorf("bad percent-encoding in enum; field=%v.%v: %w", namedType.String(), f.Name(), err)
 				}
 				b[1] = label
 
@@ -592,7 +591,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			}
 
 			if !found {
-				return nil, errors.Errorf("can't specify omitEmpty with enum unless one is an empty string; field=%v.%v", namedType.String(), f.Name())
+				return nil, fmt.Errorf("can't specify omitEmpty with enum unless one is an empty string; field=%v.%v", namedType.String(), f.Name())
 			}
 		}
 
@@ -606,7 +605,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				sequence = opt[0]
 				sequencePrefix = opt[1]
 			default:
-				return nil, errors.Errorf("sequence option needs exactly one or two parameters")
+				return nil, fmt.Errorf("sequence option needs exactly one or two parameters")
 			}
 		}
 
@@ -635,17 +634,17 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			jsonType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 			sqlType = sqlTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 		default:
-			return nil, errors.Errorf("unrecognised field type %s (%s)", ft.String(), f.Name())
+			return nil, fmt.Errorf("unrecognised field type %s (%s)", ft.String(), f.Name())
 		}
 
 		if goType == "" {
-			return nil, errors.Errorf("couldn't determine go type for %s (%s)", ft, f.Name())
+			return nil, fmt.Errorf("couldn't determine go type for %s (%s)", ft, f.Name())
 		}
 		if jsType == "" {
-			return nil, errors.Errorf("couldn't determine js type for %s (%s)", ft, f.Name())
+			return nil, fmt.Errorf("couldn't determine js type for %s (%s)", ft, f.Name())
 		}
 		if sqlType == "" {
-			return nil, errors.Errorf("couldn't determine sql type for %s (%s)", ft, f.Name())
+			return nil, fmt.Errorf("couldn't determine sql type for %s (%s)", ft, f.Name())
 		}
 
 		var jsEnums []string
@@ -668,7 +667,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 					jsonEnums[i] = enums[i].Value
 				}
 			default:
-				return nil, errors.Errorf("got enum values for %q but can't make js type for %q", f.Name(), jsType)
+				return nil, fmt.Errorf("got enum values for %q but can't make js type for %q", f.Name(), jsType)
 			}
 		}
 

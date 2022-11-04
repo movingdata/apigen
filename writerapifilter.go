@@ -31,13 +31,12 @@ func (w APIFilterWriter) PackageName(typeName string, _ *types.Named, _ *types.S
 
 func (APIFilterWriter) Imports(typeName string, namedType *types.Named, structType *types.Struct) []string {
 	return []string{
-    "strings",
-    "time",
+		"strings",
+		"time",
 		"fknsrs.biz/p/civil",
 		"fknsrs.biz/p/sqlbuilder",
-		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
-    "movingdata.com/p/wbi/internal/apifilter",
+		"movingdata.com/p/wbi/internal/apifilter",
 		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
 	}
 }

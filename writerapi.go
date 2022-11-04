@@ -25,7 +25,6 @@ func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []str
 		"fknsrs.biz/p/civil",
 		"fknsrs.biz/p/sqlbuilder",
 		"github.com/gorilla/mux",
-		"github.com/pkg/errors",
 		"github.com/satori/go.uuid",
 		"github.com/timewasted/go-accept-headers",
 		"movingdata.com/p/wbi/internal/apifilter",
@@ -54,7 +53,7 @@ func init() {
   modelutil.RegisterFinder("{{$Type.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id interface{}, uid, euid *uuid.UUID) (interface{}, error) {
     idValue, ok := id.({{$Type.IDField.GoType}})
     if !ok {
-      return nil, errors.Errorf("{{$Type.Singular}}: id should be {{$Type.IDField.GoType}}; was instead %T", id)
+      return nil, fmt.Errorf("{{$Type.Singular}}: id should be {{$Type.IDField.GoType}}; was instead %T", id)
     }
 
     v, err := {{$Type.Singular}}APIGet(ctx, db, idValue, uid, euid)
@@ -103,7 +102,7 @@ func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContex
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APIGet: couldn't generate query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APIGet: couldn't generate query: %w", err)
   }
 
   var v {{$Type.Singular}}
@@ -112,7 +111,7 @@ func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContex
       return nil, nil
     }
 
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APIGet: couldn't perform query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APIGet: couldn't perform query: %w", err)
   }
 
   return &v, nil
@@ -183,18 +182,18 @@ func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContex
   qb1 := p.AddLimits(qb)
   qs1, qv1, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb1.AsStatement).ToSQL()
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't generate result query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't generate result query: %w", err)
   }
 
   qb2 := qb.Columns(sqlbuilder.Func("count", sqlbuilder.Literal("*")))
   qs2, qv2, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb2.AsStatement).ToSQL()
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't generate summary query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't generate summary query: %w", err)
   }
 
   rows, err := db.QueryContext(ctx, qs1, qv1...)
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't perform result query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't perform result query: %w", err)
   }
   defer rows.Close()
 
@@ -202,19 +201,19 @@ func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContex
   for rows.Next() {
     var m {{$Type.Singular}}
     if err := rows.Scan({{range $i, $Field := $Type.Fields}}{{if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}} /* {{$i}} */, {{end}}); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't scan result row")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't scan result row: %w", err)
     }
 
     a = append(a, &m)
   }
 
   if err := rows.Close(); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't close result row set")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't close result row set: %w", err)
   }
 
   var total int
   if err := db.QueryRowContext(ctx, qs2, qv2...).Scan(&total); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISearch: couldn't perform summary query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't perform summary query: %w", err)
   }
 
   return &{{$Type.Singular}}APISearchResponse{
@@ -243,13 +242,13 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
 
   qs1, qv1, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APIFind: couldn't generate result query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFind: couldn't generate result query: %w", err)
   }
 
   qb2 := qb.Columns(sqlbuilder.Func("count", sqlbuilder.Literal("*")))
   qs2, qv2, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb2.AsStatement).ToSQL()
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APIFind: couldn't generate summary query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFind: couldn't generate summary query: %w", err)
   }
 
   var m {{$Type.Singular}}
@@ -258,16 +257,16 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
       return nil, nil
     }
 
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APIFind: couldn't scan result row")
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFind: couldn't scan result row: %w", err)
   }
 
   var total int
   if err := db.QueryRowContext(ctx, qs2, qv2...).Scan(&total); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APIFind: couldn't perform summary query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFind: couldn't perform summary query: %w", err)
   }
 
   if total != 1 {
-    return nil, errors.Errorf("{{$Type.Singular}}APIFind: expected one result, got %d", total)
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFind: expected one result, got %d", total)
   }
 
   return &m, nil
@@ -505,7 +504,7 @@ func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singul
 
 func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
   if input.ID == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
-    return nil, errors.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: ID field was empty")
   }
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
@@ -523,12 +522,12 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 {{- if $Field.Array}}
   for i, v := range input.{{$Field.GoName}} {
     if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-      return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
   }
 {{- else}}
   if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-    return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
   }
 {{- end}}
 {{- end}}
@@ -538,7 +537,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 {{- if not (eq $Field.Sequence "")}}
   if input.{{$Field.GoName}} == 0 {
     if err := tx.QueryRowContext(ctx, "select nextval('{{$Field.Sequence}}')").Scan(&input.{{$Field.GoName}}); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get sequence value for field \"{{$Field.APIName}}\" from sequence \"{{$Field.Sequence}}\"")
+      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't get sequence value for field \"{{$Field.APIName}}\" from sequence \"{{$Field.Sequence}}\": %w", err)
     }
   }
 {{- end}}
@@ -613,7 +612,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 
     n++
     if n > 100 {
-      return nil, errors.Errorf("{{$Type.Singular}}APICreate: BeforeSave callback for %s exceeded execution limit of 100 iterations", input.ID)
+      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: BeforeSave callback for %s exceeded execution limit of 100 iterations", input.ID)
     }
 
     exitIteration := traceregistry.Enter(ctx, &traceregistry.EventIteration{
@@ -674,7 +673,7 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
         }
 
         if err := h.Func(modelutil.WithPathEntry(ctx, fmt.Sprintf("CB#"+h.GetQualifiedName()+"#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), tx, uid, euid, options, &c, input); err != nil {
-          return nil, errors.Wrapf(err, "{{$Type.Singular}}APICreate: BeforeSave callback %s for %s failed", h.Name, input.ID)
+          return nil, fmt.Errorf("{{$Type.Singular}}APICreate: BeforeSave callback %s for %s failed: %w", h.Name, input.ID, err)
         }
       }
 
@@ -704,12 +703,12 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
       {{- if $Field.Array}}
         for i, v := range input.{{$Field.GoName}} {
           if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-            return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+            return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
           }
         }
       {{- else}}
         if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-          return nil, errors.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+          return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
         }
       {{- end}}
     {{- end}}
@@ -734,40 +733,40 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't generate query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't generate query: %w", err)
   }
 
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't perform query")
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't perform query: %w", err)
   }
 
 {{if $Type.HasVersion}}
   if _, err := tx.ExecContext(ctx, "select pg_notify('model_changes', $1)", fmt.Sprintf("{{$Type.Singular}}/%s/%d", input.ID, input.Version)); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't send postgres notification")
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't send postgres notification: %w", err)
   }
 {{end}}
 
   v, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after creation")
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't get object after creation: %w", err)
   }
 
   changeregistry.Add(ctx, "{{$Type.Singular}}", input.ID)
 
 {{if $Type.HasAudit}}
   if err := modelutil.RecordAuditEvent(ctx, tx, uuid.Must(uuid.NewV4()), time.Now(), uid, euid, "create", "{{$Type.Singular}}", input.ID, fields); err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't create audit record")
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't create audit record: %w", err)
   }
 {{end}}
 
   if queue != nil {
     if err := queue.Run(ctx, tx); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't run callback queue")
+      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't run callback queue: %w", err)
     }
 
     vv, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
     if err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APICreate: couldn't get object after running callback queue")
+      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: couldn't get object after running callback queue: %w", err)
     }
 
     v = vv
@@ -944,7 +943,7 @@ func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singula
 
 func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
   if input.ID == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
-    return nil, errors.Errorf("{{$Type.Singular}}APISave: ID field was empty")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
 
   ctx, queue := modelutil.WithDeferredCallbackQueue(ctx)
@@ -953,12 +952,12 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 
   p, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
   if err != nil {
-    return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't fetch previous state")
+    return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't fetch previous state: %w", err)
   }
 
 {{if $Type.HasVersion}}
   if input.Version != p.Version {
-    return nil, errors.Wrapf(ErrVersionMismatch, "{{$Type.Singular}}APISave: Version from input did not match current state (input=%d current=%d)", input.Version, p.Version)
+    return nil, fmt.Errorf("{{$Type.Singular}}APISave: Version from input did not match current state (input=%d current=%d): %w", input.Version, p.Version, ErrVersionMismatch)
   }
 {{end}}
 
@@ -970,12 +969,12 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 {{- if $Field.Array}}
   for i, v := range input.{{$Field.GoName}} {
     if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-      return nil, errors.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
   }
 {{- else}}
   if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-    return nil, errors.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
   }
 {{- end}}
 {{- end}}
@@ -1024,7 +1023,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 
     n++
     if n > 100 {
-      return nil, errors.Errorf("{{$Type.Singular}}APISave: BeforeSave callback for %s exceeded execution limit of 100 iterations", input.ID)
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: BeforeSave callback for %s exceeded execution limit of 100 iterations", input.ID)
     }
 
     exitIteration := traceregistry.Enter(ctx, &traceregistry.EventIteration{
@@ -1083,7 +1082,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
         }
 
         if err := h.Func(modelutil.WithPathEntry(ctx, fmt.Sprintf("CB#"+h.GetQualifiedName()+"#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), tx, uid, euid, options, &c, input); err != nil {
-          return nil, errors.Wrapf(err, "{{$Type.Singular}}APISave: BeforeSave callback %s for %s failed", h.Name, input.ID)
+          return nil, fmt.Errorf("{{$Type.Singular}}APISave: BeforeSave callback %s for %s failed: %w", h.Name, input.ID, err)
         }
       }
 
@@ -1118,12 +1117,12 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 {{- if $Field.Array}}
     for i, v := range input.{{$Field.GoName}} {
       if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-        return nil, errors.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+        return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
       }
     }
 {{- else}}
     if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-      return nil, errors.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
 {{- end}}
 {{- end}}
@@ -1169,16 +1168,16 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 
     qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
     if err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't generate query")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't generate query: %w", err)
     }
 
     if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't update record")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't update record: %w", err)
     }
 
 {{if $Type.HasVersion}}
     if _, err := tx.ExecContext(ctx, "select pg_notify('model_changes', $1)", fmt.Sprintf("{{$Type.Singular}}/%s/%d", input.ID, input.Version)); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't send postgres notification")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't send postgres notification: %w", err)
     }
 {{end}}
 
@@ -1186,19 +1185,19 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 
 {{if $Type.HasAudit}}
     if err := modelutil.RecordAuditEvent(ctx, tx, uuid.Must(uuid.NewV4()), time.Now(), uid, euid, "update", "{{$Type.Singular}}", input.ID, changed); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't create audit record")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't create audit record: %w", err)
     }
 {{end}}
   }
 
   if queue != nil {
     if err := queue.Run(ctx, tx); err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't run callback queue")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't run callback queue: %w", err)
     }
 
     vv, err := {{$Type.Singular}}APIGet(ctx, tx, input.ID, &uid, &euid)
     if err != nil {
-      return nil, errors.Wrap(err, "{{$Type.Singular}}APISave: couldn't get object after running callback queue")
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: couldn't get object after running callback queue: %w", err)
     }
 
     input = vv
@@ -1365,10 +1364,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatedAt(id {{$Type.IDField.GoT
 
 func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id {{$Type.IDField.GoType}}, createdAt time.Time) error {
   if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
-    return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatedAt: id was empty")
   }
   if createdAt.IsZero() {
-    return errors.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
   }
 
   qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
@@ -1377,11 +1376,11 @@ func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.M
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatedAt: couldn't generate query")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatedAt: couldn't generate query: %w", err)
   }
 
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatedAt: couldn't update record")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatedAt: couldn't update record: %w", err)
   }
 
   return nil
@@ -1397,10 +1396,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeCreatorID(id, creatorID uuid.UUI
 
 func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, creatorID uuid.UUID) error {
   if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
-    return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatorID: id was empty")
   }
   if creatorID == uuid.Nil {
-    return errors.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
   }
 
   qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
@@ -1409,11 +1408,11 @@ func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.M
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatorID: couldn't generate query")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatorID: couldn't generate query: %w", err)
   }
 
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeCreatorID: couldn't update record")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeCreatorID: couldn't update record: %w", err)
   }
 
   return nil
@@ -1429,10 +1428,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdatedAt(id {{$Type.IDField.GoT
 
 func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id {{$Type.IDField.GoType}}, updatedAt time.Time) error {
   if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
-    return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: id was empty")
   }
   if updatedAt.IsZero() {
-    return errors.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
   }
 
   qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
@@ -1441,11 +1440,11 @@ func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.M
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdatedAt: couldn't generate query")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: couldn't generate query: %w", err)
   }
 
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdatedAt: couldn't update record")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: couldn't update record: %w", err)
   }
 
   return nil
@@ -1461,10 +1460,10 @@ func (jsctx *JSContext) {{$Type.Singular}}ChangeUpdaterID(id, updaterID uuid.UUI
 
 func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, id, updaterID uuid.UUID) error {
   if id == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
-    return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdaterID: id was empty")
   }
   if updaterID == uuid.Nil {
-    return errors.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
   }
 
   qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
@@ -1473,11 +1472,11 @@ func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.M
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdaterID: couldn't generate query")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdaterID: couldn't generate query: %w", err)
   }
 
   if _, err := tx.ExecContext(ctx, qs, qv...); err != nil {
-    return errors.Wrap(err, "{{$Type.Singular}}APIChangeUpdaterID: couldn't update record")
+    return fmt.Errorf("{{$Type.Singular}}APIChangeUpdaterID: couldn't update record: %w", err)
   }
 
   return nil
