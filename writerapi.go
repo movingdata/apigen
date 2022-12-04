@@ -1482,4 +1482,26 @@ func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.M
   return nil
 }
 {{end}}
+
+{{range $Field := $Type.Fields}}
+{{- if not (eq $Field.Sequence "")}}
+func (jsctx *JSContext) {{$Type.Singular}}Set{{$Field.GoName}}IfEmpty(v *{{$Type.Singular}}) {
+  if err := {{$Type.Singular}}APISet{{$Field.GoName}}IfEmpty(jsctx.ctx, jsctx.tx, v); err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+}
+
+func {{$Type.Singular}}APISet{{$Field.GoName}}IfEmpty(ctx context.Context, tx *sql.Tx, v *{{$Type.Singular}}) error {
+  if v.{{$Field.GoName}} != 0 {
+    return nil
+  }
+
+  if err := tx.QueryRowContext(ctx, "select nextval('{{$Field.Sequence}}')").Scan(&v.{{$Field.GoName}}); err != nil {
+    return fmt.Errorf("{{$Type.Singular}}APISet{{$Field.GoName}}IfEmpty: couldn't get sequence value for field \"{{$Field.APIName}}\" from sequence \"{{$Field.Sequence}}\": %w", err)
+  }
+
+  return nil
+}
+{{- end}}
+{{end}}
 `))
