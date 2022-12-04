@@ -40,26 +40,27 @@ var enumTemplate = template.Must(template.New("enumTemplate").Funcs(tplFunc).Par
 {{- if $Field.Enum}}
 const (
 {{- range $Enum := $Field.Enum}}
-  {{$Field.GoName}}{{$Enum.GoName}} = "{{$Enum.Value}}"
+	{{$Field.GoName}}{{$Enum.GoName}} = "{{$Enum.Value}}"
 {{- end}}
 )
 
 var (
-  Valid{{$Field.GoName}} = map[string]bool{}
-  Values{{$Field.GoName}} = []string{}
-  Labels{{$Field.GoName}} = map[string]string{
+	Valid{{$Field.GoName}} = map[string]bool{
 {{- range $Enum := $Field.Enum}}
-    {{$Field.GoName}}{{$Enum.GoName}}: "{{$Enum.Label}}",
+		{{$Field.GoName}}{{$Enum.GoName}}: true,
 {{- end}}
-  }
+	}
+	Values{{$Field.GoName}} = []string{
+{{- range $Enum := $Field.Enum}}
+		{{$Field.GoName}}{{$Enum.GoName}},
+{{- end}}
+	}
+	Labels{{$Field.GoName}} = map[string]string{
+{{- range $Enum := $Field.Enum}}
+		{{$Field.GoName}}{{$Enum.GoName}}: "{{$Enum.Label}}",
+{{- end}}
+	}
 )
-
-func init() {
-  for k := range Labels{{$Field.GoName}} {
-    Valid{{$Field.GoName}}[k] = true
-    Values{{$Field.GoName}} = append(Values{{$Field.GoName}}, k)
-  }
-}
 {{- end}}
 {{- end}}
 `))
