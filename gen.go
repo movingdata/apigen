@@ -8,10 +8,10 @@ import (
 	"io"
 	"net/url"
 	"reflect"
-	"regexp"
 	"sort"
 	"strings"
 	"text/template"
+	"unicode"
 
 	"github.com/danverbraganza/varcaser/varcaser"
 	"github.com/grsmv/inflect"
@@ -43,13 +43,181 @@ import (
 
 `))
 
+var upperCaseOverrides = []string{
+	"ADBOR",
+	"API",
+	"CIDN",
+	"CMP",
+	"EOMSYS",
+	"FNN",
+	"ID",
+	"IDEAL",
+	"IP",
+	"MNP",
+	"NBN",
+	"PM",
+	"SIM",
+	"UI",
+	"UNMS",
+	"VISP",
+	"WAS",
+	"WBI",
+	"TWI",
+}
+
+var lowerCaseOverrides = []string{
+	"a",
+	"an",
+	"and",
+	"as",
+	"at",
+	"but",
+	"by",
+	"for",
+	"if",
+	"in",
+	"nor",
+	"of",
+	"off",
+	"on",
+	"or",
+	"per",
+	"so",
+	"the",
+	"to",
+	"up",
+	"via",
+	"yet",
+}
+
+func decorateWordCaseWithCaseOverrides(fn varcaser.WordCase, a ...[]string) varcaser.WordCase {
+	return varcaser.WordCase(func(word string) string {
+		for _, l := range a {
+			for _, e := range l {
+				if strings.ToLower(word) == strings.ToLower(e) {
+					return e
+				}
+			}
+		}
+
+		return fn(word)
+	})
+}
+
+func decorateCaseConventionWithCaseOverrides(c varcaser.CaseConvention) varcaser.CaseConvention {
+	return varcaser.CaseConvention{
+		JoinStyle:      c.JoinStyle,
+		InitialCase:    decorateWordCaseWithCaseOverrides(c.InitialCase, upperCaseOverrides),
+		SubsequentCase: decorateWordCaseWithCaseOverrides(c.SubsequentCase, upperCaseOverrides),
+		Example:        c.Example,
+	}
+}
+
+func inSlice(a []string, s string) bool {
+	for _, e := range a {
+		if e == s {
+			return true
+		}
+	}
+
+	return false
+}
+
+func splitWords(s string) []string {
+	// NOTE(danver): While I keep finding new edge cases, I'll want
+	// this to be easy-to-modify code rather than a regex.
+
+	var words []string
+
+	wasPreviousUpper := true
+	current := []rune{}
+
+	for _, c := range s {
+		if wasPreviousUpper && unicode.IsUpper(c) {
+			// If previous was uppercase, and this is
+			// uppercase, continue the word.
+
+			current = append(current, c)
+
+			if inSlice(upperCaseOverrides, string(current)) {
+				words = append(words, string(current))
+				current = []rune{}
+			}
+		} else if wasPreviousUpper && !unicode.IsUpper(c) {
+			// If the previous run was uppercase, but this
+			// is not, set previous, but add it.
+
+			// Edge case: the previous word was all uppercase.
+			if len(current) > 1 {
+				words = append(words, string(current[:len(current)-1]))
+				current = current[len(current)-1:]
+			}
+
+			current = append(current, c)
+			wasPreviousUpper = false
+		} else if !wasPreviousUpper && unicode.IsUpper(c) {
+			// If the previous rune was not uppercase, and
+			// this character is, put current into
+			// components first, then set wasPreviousUpper
+
+			words = append(words, string(current))
+			current = []rune{c}
+			wasPreviousUpper = true
+		} else if !wasPreviousUpper && !unicode.IsUpper(c) {
+			// If the previous rune was not uppercase, and
+			// this one is not, just add to this component.
+
+			current = append(current, c)
+		}
+	}
+
+	if len(current) != 0 {
+		words = append(words, string(current))
+	}
+
+	return words
+}
+
 var (
-	lcucc = varcaser.Caser{From: varcaser.LowerCamelCase, To: varcaser.UpperCamelCaseKeepCaps}
-	uclc  = varcaser.Caser{From: varcaser.UpperCamelCase, To: varcaser.LowerCamelCase}
-	uclcc = varcaser.Caser{From: varcaser.UpperCamelCase, To: varcaser.LowerCamelCaseKeepCaps}
-	ucls  = varcaser.Caser{From: varcaser.UpperCamelCase, To: varcaser.LowerSnakeCase}
-	lkucc = varcaser.Caser{From: varcaser.KebabCase, To: varcaser.UpperCamelCase}
+	lowerCamelUpperCamelCaps *varcaser.Caser
+	lowerKebabTitleCase      *varcaser.Caser
+	lowerKebabUpperCamelCaps *varcaser.Caser
+	upperCamelLowerCamel     *varcaser.Caser
+	upperCamelLowerCamelCaps *varcaser.Caser
+	upperCamelLowerSnake     *varcaser.Caser
 )
+
+func init() {
+	lowerCamelUpperCamelCaps = &varcaser.Caser{
+		From: varcaser.LowerCamelCase,
+		To:   decorateCaseConventionWithCaseOverrides(varcaser.UpperCamelCaseKeepCaps),
+	}
+	lowerKebabTitleCase = &varcaser.Caser{
+		From: varcaser.KebabCase,
+		To: decorateCaseConventionWithCaseOverrides(varcaser.CaseConvention{
+			JoinStyle:      varcaser.SimpleJoinStyle(" "),
+			InitialCase:    decorateWordCaseWithCaseOverrides(strings.Title, upperCaseOverrides),
+			SubsequentCase: decorateWordCaseWithCaseOverrides(strings.Title, upperCaseOverrides, lowerCaseOverrides),
+			Example:        "Upper Title Case",
+		}),
+	}
+	lowerKebabUpperCamelCaps = &varcaser.Caser{
+		From: varcaser.KebabCase,
+		To:   decorateCaseConventionWithCaseOverrides(varcaser.UpperCamelCase),
+	}
+	upperCamelLowerCamel = &varcaser.Caser{
+		From: decorateCaseConventionWithCaseOverrides(varcaser.UpperCamelCase),
+		To:   varcaser.LowerCamelCase,
+	}
+	upperCamelLowerCamelCaps = &varcaser.Caser{
+		From: decorateCaseConventionWithCaseOverrides(varcaser.UpperCamelCase),
+		To:   varcaser.LowerCamelCaseKeepCaps,
+	}
+	upperCamelLowerSnake = &varcaser.Caser{
+		From: decorateCaseConventionWithCaseOverrides(varcaser.UpperCamelCase),
+		To:   varcaser.LowerSnakeCase,
+	}
+}
 
 func getFieldIndex(t *types.Struct, name string) (int, bool) {
 	for i := 0; i < t.NumFields(); i++ {
@@ -107,38 +275,21 @@ func getAndParseTagIndex(t *types.Struct, field int, tag string) (string, map[st
 	return parseTag(getTagIndex(t, field, tag))
 }
 
-var (
-	wordRegexp = regexp.MustCompile("[A-Z]+[a-z]+")
-)
+func pluralFor(s string) string {
+	a := splitWords(s)
 
-func pluralFor(s string) (string, string) {
-	words := wordRegexp.FindAllString(strings.ToUpper(s[0:1])+s[1:], -1)
+	a[len(a)-1] = inflect.Pluralize(a[len(a)-1])
 
-	if len(words) == 0 {
-		words = []string{s}
+	for i, e := range a {
+		a[i] = strings.ToLower(e)
 	}
 
-	pluralWords := words[:]
-	pluralWords[len(pluralWords)-1] = inflect.Pluralize(pluralWords[len(pluralWords)-1])
-	pluralSnake := strings.ToLower(strings.Join(pluralWords, "_"))
-	pluralCamel := strings.Join(pluralWords, "")
-
-	return pluralSnake, pluralCamel
+	return varcaser.LowerSnakeCase.Join(a)
 }
 
-func singularFor(s string) (string, string) {
-	words := wordRegexp.FindAllString(strings.ToUpper(s[0:1])+s[1:], -1)
-
-	if len(words) == 0 {
-		words = []string{s}
-	}
-
-	singularWords := words[:]
-	singularWords[len(singularWords)-1] = inflect.Singularize(singularWords[len(singularWords)-1])
-	singularSnake := strings.ToLower(strings.Join(singularWords, "_"))
-	singularCamel := strings.Join(singularWords, "")
-
-	return singularSnake, singularCamel
+var scanTypes = map[string]string{
+	"[]time.Time":     "sqltypes.TimeArray",
+	"[]time.Duration": "sqltypes.DurationArray",
 }
 
 var jsTypes = map[string]string{
@@ -148,6 +299,7 @@ var jsTypes = map[string]string{
 	"bool":            "boolean",
 	"uuid.UUID":       "string",
 	"time.Time":       "string",
+	"time.Duration":   "string",
 	"civil.Date":      "string",
 	"json.RawMessage": "any",
 }
@@ -159,11 +311,22 @@ var sqlTypes = map[string]string{
 	"bool":            "boolean",
 	"uuid.UUID":       "uuid",
 	"time.Time":       "timestamp with time zone",
+	"time.Duration":   "integer",
 	"civil.Date":      "date",
 	"json.RawMessage": "json",
 }
 
-var ignoreInput = map[string]bool{
+var ignoreCreate = map[string]bool{
+	"id":        true,
+	"version":   true,
+	"createdAt": true,
+	"updatedAt": true,
+	"creatorId": true,
+	"updaterId": true,
+}
+
+var ignoreUpdate = map[string]bool{
+	"id":        true,
 	"version":   true,
 	"createdAt": true,
 	"updatedAt": true,
@@ -237,8 +400,8 @@ var tplFunc = template.FuncMap{
 		v := base64.StdEncoding.EncodeToString(h.Sum(nil))
 		return v[0:6]
 	},
-	"LKUCC": lkucc.String,
-	"UCLS":  ucls.String,
+	"LKUCC": func(s string) string { return lowerKebabUpperCamelCaps.String(s) },
+	"UCLS":  func(s string) string { return upperCamelLowerSnake.String(s) },
 	"Dump":  formatGo,
 	"Default": func(defaultValue, input string) string {
 		if input == "" {
@@ -246,6 +409,9 @@ var tplFunc = template.FuncMap{
 		}
 
 		return input
+	},
+	"PackageName": func(suffix, modelName string) string {
+		return strings.ToLower(modelName) + suffix
 	},
 	"LC": func(s string) string {
 		return strings.ToLower(s)
@@ -297,6 +463,18 @@ var tplFunc = template.FuncMap{
 			return fmt.Sprintf("%s.Equal(%s)", arg1, arg2)
 		case type1 == "*time.Time" && type2 == "*time.Time":
 			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && %s.Equal(*%s)))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]time.Time" && type2 == "[]time.Time":
+			return fmt.Sprintf("modelutil.EqualTimeSlice(%s, %s)", arg1, arg2)
+		case type1 == "sqltypes.TimeArray" && type2 == "sqltypes.TimeArray":
+			return fmt.Sprintf("modelutil.EqualTimeArray(%s, %s)", arg1, arg2)
+		case type1 == "time.Duration" && type2 == "time.Duration":
+			return fmt.Sprintf("%s == %s", arg1, arg2)
+		case type1 == "*time.Duration" && type2 == "*time.Duration":
+			return fmt.Sprintf("((%s == nil && %s == nil) || (%s != nil && %s != nil && *%s == *%s))", arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]time.Duration" && type2 == "[]time.Duration":
+			return fmt.Sprintf("modelutil.EqualDurationSlice(%s, %s)", arg1, arg2)
+		case type1 == "sqltypes.DurationArray" && type2 == "sqltypes.DurationArray":
+			return fmt.Sprintf("modelutil.EqualDurationArray(%s, %s)", arg1, arg2)
 		case type1 == "civil.Date" && type2 == "civil.Date":
 			return fmt.Sprintf("%s.On(%s)", arg1, arg2)
 		case type1 == "*civil.Date" && type2 == "*civil.Date":
@@ -336,6 +514,18 @@ var tplFunc = template.FuncMap{
 			return fmt.Sprintf("!%s.Equal(%s)", arg1, arg2)
 		case type1 == "*time.Time" && type2 == "*time.Time":
 			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && !%s.Equal(*%s)))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]time.Time" && type2 == "[]time.Time":
+			return fmt.Sprintf("!modelutil.EqualTimeSlice(%s, %s)", arg1, arg2)
+		case type1 == "sqltypes.TimeArray" && type2 == "sqltypes.TimeArray":
+			return fmt.Sprintf("!modelutil.EqualTimeArray(%s, %s)", arg1, arg2)
+		case type1 == "time.Duration" && type2 == "time.Duration":
+			return fmt.Sprintf("!%s.Equal(%s)", arg1, arg2)
+		case type1 == "*time.Duration" && type2 == "*time.Duration":
+			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && *%s != *%s))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]time.Duration" && type2 == "[]time.Duration":
+			return fmt.Sprintf("!modelutil.EqualDurationSlice(%s, %s)", arg1, arg2)
+		case type1 == "sqltypes.DurationArray" && type2 == "sqltypes.DurationArray":
+			return fmt.Sprintf("!modelutil.EqualDurationArray(%s, %s)", arg1, arg2)
 		case type1 == "civil.Date" && type2 == "civil.Date":
 			return fmt.Sprintf("!%s.On(%s)", arg1, arg2)
 		case type1 == "*civil.Date" && type2 == "*civil.Date":
@@ -350,45 +540,61 @@ var tplFunc = template.FuncMap{
 }
 
 type Model struct {
-	HTTPSearch     bool
-	HTTPGet        bool
-	HTTPCreate     bool
-	HTTPUpdate     bool
-	Singular       string
-	Plural         string
-	LowerPlural    string
-	Fields         []Field
-	IDField        *Field
+	Singular         string
+	Plural           string
+	LowerPlural      string
+	LowerSnakePlural string
+
+	IDField      *Field
+	VersionField *Field
+	Fields       []Field
+
 	SpecialOrders  []SpecialOrder
 	SpecialFilters []Filter
-	CanCreate      bool
-	CanUpdate      bool
-	HasVersion     bool
-	HasCreatedAt   bool
-	HasUpdatedAt   bool
-	HasCreatorID   bool
-	HasUpdaterID   bool
-	HasAudit       bool
-	HasUserFilter  bool
+
+	HasID        bool
+	HasVersion   bool
+	HasCreatedAt bool
+	HasUpdatedAt bool
+	HasCreatorID bool
+	HasUpdaterID bool
+
+	HasAudit      bool
+	HasUserFilter bool
+
+	HasAPISearch bool
+	HasAPIGet    bool
+	HasAPICreate bool
+	HasAPIUpdate bool
+
+	SQLTableName       string
+	HasSQLFindOne      bool
+	HasSQLFindOneByID  bool
+	HasSQLFindMultiple bool
+	HasSQLCreate       bool
+	HasSQLSave         bool
 }
 
 type Field struct {
 	IsNull bool
 	Array  bool
 
-	GoName string
-	GoType string
+	GoName   string
+	GoType   string
+	ScanType string
 
 	SQLName string
 	SQLType string
 
 	APIName  string
+	APIRefs  []APIRef
 	JSType   string
 	JSONType map[string]interface{}
 
 	Filters []Filter
 
-	IgnoreInput    bool
+	IgnoreCreate   bool
+	IgnoreUpdate   bool
 	OmitEmpty      bool
 	Enum           Enums
 	Sequence       string
@@ -405,6 +611,11 @@ func (f Fields) GetByGoName(name string) *Field {
 	}
 
 	return nil
+}
+
+type APIRef struct {
+	ModelName string
+	FieldName string
 }
 
 type Enum struct {
@@ -436,37 +647,53 @@ type Filter struct {
 }
 
 func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*Model, error) {
-	r, err := regexp.Compile("[A-Z]+[a-z]+")
-	if err != nil {
-		return nil, err
-	}
+	// r, err := regexp.Compile("[A-Z]+[a-z]+")
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	words := r.FindAllString(strings.ToUpper(typeName[0:1])+typeName[1:], -1)
-	if len(words) == 0 {
-		words = []string{strings.ToUpper(typeName[0:1]) + typeName[1:]}
-	}
+	// words := r.FindAllString(strings.ToUpper(typeName[0:1])+typeName[1:], -1)
+	// if len(words) == 0 {
+	// 	words = []string{strings.ToUpper(typeName[0:1]) + typeName[1:]}
+	// }
+	// words[len(words)-1] = inflect.Pluralize(words[len(words)-1])
+
+	words := splitWords(typeName)
+
 	words[len(words)-1] = inflect.Pluralize(words[len(words)-1])
 
+	for i, e := range words {
+		if i == 0 {
+			words[i] = upperCamelLowerCamelCaps.To.InitialCase(e)
+		} else {
+			words[i] = upperCamelLowerCamelCaps.To.SubsequentCase(e)
+		}
+	}
+
 	var (
-		lowerPlural    = uclcc.String(inflect.Camelize(strings.Join(words, "_")))
-		fields         Fields
-		specialOrders  []SpecialOrder
-		specialFilters []Filter
-		noCreate       = false
-		canCreate      = false
-		noUpdate       = false
-		canUpdate      = false
-		hasVersion     = false
-		hasCreatedAt   = false
-		hasUpdatedAt   = false
-		hasCreatorID   = false
-		hasUpdaterID   = false
-		hasAudit       = true
-		hasUserFilter  = false
-		httpSearch     = true
-		httpGet        = true
-		httpCreate     = true
-		httpUpdate     = true
+		lowerPlural        = upperCamelLowerCamelCaps.To.Join(words)
+		lowerSnakePlural   = pluralFor(typeName)
+		sqlTableName       = pluralFor(typeName)
+		fields             Fields
+		specialOrders      []SpecialOrder
+		specialFilters     []Filter
+		hasID              = false
+		hasVersion         = false
+		hasCreatedAt       = false
+		hasUpdatedAt       = false
+		hasCreatorID       = false
+		hasUpdaterID       = false
+		hasUserFilter      = false
+		hasAPINoAudit      = false
+		hasAPINoSearch     = false
+		hasAPINoGet        = false
+		hasAPINoCreate     = false
+		hasAPINoUpdate     = false
+		hasSQLFindOne      = false
+		hasSQLFindOneByID  = false
+		hasSQLFindMultiple = false
+		hasSQLCreate       = false
+		hasSQLSave         = false
 	)
 
 	for i := 0; i < structType.NumFields(); i++ {
@@ -484,54 +711,72 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			if jsonName != "" {
 				apiName = jsonName
 			} else {
-				apiName = uclc.String(f.Name())
+				apiName = upperCamelLowerCamel.String(f.Name())
 			}
-		}
-
-		sqlName, _ := getAndParseTagIndex(structType, i, "sql")
-		if sqlName == "" {
-			sqlName = ucls.String(f.Name())
-		}
-
-		if apiName == "version" {
-			hasVersion = true
-		}
-		if apiName == "createdAt" {
-			hasCreatedAt = true
-			canCreate = true
-		}
-		if apiName == "updatedAt" {
-			hasUpdatedAt = true
-			canUpdate = true
-		}
-		if apiName == "creatorId" {
-			hasCreatorID = true
-		}
-		if apiName == "updaterId" {
-			hasUpdaterID = true
 		}
 
 		if a, ok := apiTagOptions["lowerPlural"]; ok && len(a) > 0 && len(a[0]) > 0 {
 			lowerPlural = a[0][0]
 		}
 
-		if _, ok := apiTagOptions["noaudit"]; ok {
-			hasAudit = false
+		if apiName == "id" {
+			hasID = true
+		}
+		if apiName == "version" {
+			hasVersion = true
+		}
+		if apiName == "createdAt" {
+			hasCreatedAt = true
+		}
+		if apiName == "creatorId" {
+			hasCreatorID = true
+		}
+		if apiName == "updatedAt" {
+			hasUpdatedAt = true
+		}
+		if apiName == "updaterId" {
+			hasUpdaterID = true
 		}
 
+		if _, ok := apiTagOptions["noaudit"]; ok {
+			hasAPINoAudit = true
+		}
 		if _, ok := apiTagOptions["nosearch"]; ok {
-			httpSearch = false
+			hasAPINoSearch = true
 		}
 		if _, ok := apiTagOptions["noget"]; ok {
-			httpGet = false
+			hasAPINoGet = true
 		}
 		if _, ok := apiTagOptions["nocreate"]; ok {
-			httpCreate = false
-			noCreate = true
+			hasAPINoCreate = true
 		}
 		if _, ok := apiTagOptions["noupdate"]; ok {
-			httpUpdate = false
-			noUpdate = true
+			hasAPINoUpdate = true
+		}
+
+		sqlName, sqlTagOptions := getAndParseTagIndex(structType, i, "sql")
+		if sqlName == "" {
+			sqlName = upperCamelLowerSnake.String(f.Name())
+		}
+
+		if a, ok := sqlTagOptions["table"]; ok && len(a) > 0 {
+			sqlTableName = a[0][0]
+		}
+
+		if _, ok := sqlTagOptions["findOne"]; ok {
+			hasSQLFindOne = true
+		}
+		if _, ok := sqlTagOptions["findOneByID"]; ok {
+			hasSQLFindOneByID = true
+		}
+		if _, ok := sqlTagOptions["findMultiple"]; ok {
+			hasSQLFindMultiple = true
+		}
+		if _, ok := sqlTagOptions["create"]; ok {
+			hasSQLCreate = true
+		}
+		if _, ok := sqlTagOptions["save"]; ok {
+			hasSQLSave = true
 		}
 
 		var enums Enums
@@ -543,7 +788,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			for i, s := range a {
 				b := strings.SplitN(s, ":", 3)
 				if len(b) == 1 {
-					b = append(b, strings.Title(strings.Replace(b[0], "-", " ", -1)))
+					b = append(b, lowerKebabTitleCase.String(b[0]))
 				}
 				if len(b) == 2 {
 					v := b[0]
@@ -551,7 +796,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 						v = "empty"
 					}
 
-					b = append(b, lkucc.String(v))
+					b = append(b, lowerKebabUpperCamelCaps.String(v))
 				}
 
 				label, err := url.QueryUnescape(b[1])
@@ -613,7 +858,8 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			GoName:         f.Name(),
 			APIName:        apiName,
 			SQLName:        sqlName,
-			IgnoreInput:    ignoreInput[apiName],
+			IgnoreCreate:   ignoreCreate[apiName],
+			IgnoreUpdate:   ignoreUpdate[apiName],
 			OmitEmpty:      omitEmpty,
 			Enum:           enums,
 			Sequence:       sequence,
@@ -625,14 +871,14 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		switch ft := ft.(type) {
 		case *types.Basic:
 			goType = ft.String()
-			jsType = jsTypes[ft.String()]
-			jsonType = jsTypes[ft.String()]
-			sqlType = sqlTypes[ft.String()]
+			jsType = jsTypes[goType]
+			jsonType = jsTypes[goType]
+			sqlType = sqlTypes[goType]
 		case *types.Named:
 			goType = ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
-			jsType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
-			jsonType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
-			sqlType = sqlTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
+			jsType = jsTypes[goType]
+			jsonType = jsTypes[goType]
+			sqlType = sqlTypes[goType]
 		default:
 			return nil, fmt.Errorf("unrecognised field type %s (%s)", ft.String(), f.Name())
 		}
@@ -699,6 +945,10 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			}
 		}
 
+		if scanType := scanTypes[gf.GoType]; scanType != "" {
+			gf.ScanType = scanType
+		}
+
 		for range apiTagOptions["userFilter"] {
 			hasUserFilter = true
 		}
@@ -717,7 +967,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		}
 
 		for _, opts := range apiTagOptions["specialFilter"] {
-			goName := lcucc.String(apiName)
+			goName := lowerCamelUpperCamelCaps.String(apiName)
 			if len(opts) > 0 && opts[0] != "" {
 				goName = opts[0]
 			}
@@ -767,7 +1017,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				filterOptions = [][]string{{"@>"}, {"!@>"}, {"<@"}, {"!<@"}, {"&&"}, {"!&&"}}
 			case "bool", "*bool":
 				filterOptions = [][]string{{"="}, {"!="}}
-			case "time.Time", "*time.Time", "civil.Date", "*civil.Date":
+			case "time.Time", "*time.Time", "time.Duration", "*time.Duration", "civil.Date", "*civil.Date":
 				filterOptions = [][]string{{"="}, {"!="}, {"<"}, {"<="}, {">"}, {">="}}
 
 				if isPointer {
@@ -899,31 +1149,57 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			gf.Filters = append(gf.Filters, gff)
 		}
 
+		for _, opts := range apiTagOptions["ref"] {
+			var modelName, fieldName string
+			switch len(opts) {
+			case 1:
+				modelName = opts[0]
+				fieldName = "ID"
+			case 2:
+				modelName = opts[0]
+				fieldName = opts[1]
+			default:
+				return nil, fmt.Errorf("bad ref option (%v); field=%v.%v", opts, namedType.String(), f.Name())
+			}
+
+			gf.APIRefs = append(gf.APIRefs, APIRef{
+				ModelName: modelName,
+				FieldName: fieldName,
+			})
+		}
+
 		if f.Exported() {
 			fields = append(fields, gf)
 		}
 	}
 
 	return &Model{
-		HTTPSearch:     httpSearch,
-		HTTPGet:        httpGet,
-		HTTPCreate:     httpCreate,
-		HTTPUpdate:     httpUpdate,
-		Singular:       typeName,
-		Plural:         inflect.Camelize(strings.Join(words, "_")),
-		LowerPlural:    lowerPlural,
-		Fields:         fields,
-		IDField:        fields.GetByGoName("ID"),
-		SpecialOrders:  specialOrders,
-		SpecialFilters: specialFilters,
-		CanCreate:      canCreate && !noCreate,
-		CanUpdate:      canUpdate && !noUpdate,
-		HasVersion:     hasVersion,
-		HasCreatedAt:   hasCreatedAt,
-		HasUpdatedAt:   hasUpdatedAt,
-		HasCreatorID:   hasCreatorID,
-		HasUpdaterID:   hasUpdaterID,
-		HasAudit:       hasAudit,
-		HasUserFilter:  hasUserFilter,
+		Singular:           typeName,
+		Plural:             inflect.Camelize(strings.Join(words, "_")),
+		LowerPlural:        lowerPlural,
+		LowerSnakePlural:   lowerSnakePlural,
+		SQLTableName:       sqlTableName,
+		Fields:             fields,
+		IDField:            fields.GetByGoName("ID"),
+		VersionField:       fields.GetByGoName("Version"),
+		SpecialOrders:      specialOrders,
+		SpecialFilters:     specialFilters,
+		HasID:              hasID,
+		HasVersion:         hasVersion,
+		HasCreatedAt:       hasCreatedAt,
+		HasUpdatedAt:       hasUpdatedAt,
+		HasCreatorID:       hasCreatorID,
+		HasUpdaterID:       hasUpdaterID,
+		HasAudit:           hasAPINoAudit == false,
+		HasUserFilter:      hasUserFilter,
+		HasAPISearch:       hasAPINoSearch == false,
+		HasAPIGet:          hasAPINoGet == false,
+		HasAPICreate:       hasAPINoCreate == false && hasCreatedAt,
+		HasAPIUpdate:       hasAPINoUpdate == false && hasUpdatedAt,
+		HasSQLFindOne:      hasSQLFindOne,
+		HasSQLFindOneByID:  hasSQLFindOneByID,
+		HasSQLFindMultiple: hasSQLFindMultiple,
+		HasSQLCreate:       hasSQLCreate,
+		HasSQLSave:         hasSQLSave,
 	}, nil
 }

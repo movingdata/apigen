@@ -41,6 +41,11 @@ func (w *SwaggerWriter) Write(wr io.Writer, typeName string, namedType *types.Na
 	properties := map[string]interface{}{}
 
 	for _, field := range model.Fields {
+		if typ, ok := field.JSONType["type"]; ok && typ == "any" {
+			properties[field.APIName] = map[string]interface{}{}
+			continue
+		}
+
 		properties[field.APIName] = field.JSONType
 	}
 
@@ -49,7 +54,7 @@ func (w *SwaggerWriter) Write(wr io.Writer, typeName string, namedType *types.Na
 		"properties": properties,
 	}
 
-	if model.HTTPSearch {
+	if model.HasAPISearch {
 		var parameters []interface{}
 
 		for _, field := range model.Fields {
@@ -159,7 +164,7 @@ func (w *SwaggerWriter) Write(wr io.Writer, typeName string, namedType *types.Na
 		}
 	}
 
-	if model.HTTPGet {
+	if model.HasAPIGet {
 		if _, ok := w.paths["/"+model.LowerPlural+"/{id}"]; !ok {
 			w.paths["/"+model.LowerPlural+"/{id}"] = map[string]interface{}{}
 		}
@@ -193,7 +198,7 @@ func (w *SwaggerWriter) Write(wr io.Writer, typeName string, namedType *types.Na
 		}
 	}
 
-	if model.HTTPCreate {
+	if model.HasAPICreate {
 		if _, ok := w.paths["/"+model.LowerPlural]; !ok {
 			w.paths["/"+model.LowerPlural] = map[string]interface{}{}
 		}
@@ -226,7 +231,7 @@ func (w *SwaggerWriter) Write(wr io.Writer, typeName string, namedType *types.Na
 		}
 	}
 
-	if model.HTTPUpdate {
+	if model.HasAPIUpdate {
 		if _, ok := w.paths["/"+model.LowerPlural+"/{id}"]; !ok {
 			w.paths["/"+model.LowerPlural+"/{id}"] = map[string]interface{}{}
 		}

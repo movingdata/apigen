@@ -95,11 +95,12 @@ export type {{$Type.Singular}} = {|
 {{- end}}
 |};
 
-{{if $Type.CanCreate}}
+{{if $Type.HasAPICreate}}
 /** {{$Type.Singular}}CreateInput is the data needed to call {{$Type.LowerPlural}}Create */
 export type {{$Type.Singular}}CreateInput = {|
+  id: {{$Type.IDField.JSType}},
 {{- range $Field := $Type.Fields}}
-{{- if not (or $Field.IgnoreInput) }}
+{{- if not $Field.IgnoreCreate }}
   {{$Field.APIName}}{{if $Field.OmitEmpty}}?{{end}}: {{$Field.JSType}},
 {{- end}}
 {{- end}}
@@ -130,11 +131,11 @@ export type State = {
   timeouts: { [key: string]: ?TimeoutID },
 };
 
-{{if (or $Type.CanCreate $Type.CanUpdate)}}
+{{if (or $Type.HasAPICreate $Type.HasAPIUpdate)}}
 type Invalidator = (c: SearchCache<{{$Type.Singular}}SearchParams>) => SearchCache<{{$Type.Singular}}SearchParams>;
 {{end}}
 
-{{if $Type.CanCreate}}
+{{if $Type.HasAPICreate}}
 type {{$Type.Singular}}CreateOptions = {
   invalidate?: boolean | Invalidator,
   after?: (err: ?Error, record?: {{$Type.Singular}}) => void,
@@ -149,7 +150,7 @@ type {{$Type.Singular}}CreateMultipleOptions = {
 };
 {{end}}
 
-{{if $Type.CanUpdate}}
+{{if $Type.HasAPIUpdate}}
 type {{$Type.Singular}}UpdateOptions = {
   invalidate?: boolean | Invalidator,
   after?: (err: ?Error, record?: {{$Type.Singular}}) => void,
@@ -225,7 +226,7 @@ export type Action =
       type: 'X/{{Hash $Type.LowerPlural "/FETCH_FAILED_MULTI"}}',
       payload: { ids: $ReadOnlyArray<string>, time: number, error: ErrorResponse },
     }
-{{if $Type.CanCreate}}
+{{if $Type.HasAPICreate}}
   | {
       type: 'X/{{Hash $Type.LowerPlural "/CREATE_BEGIN"}}',
       payload: { record: {{$Type.Singular}} },
@@ -251,7 +252,7 @@ export type Action =
       payload: { records: $ReadOnlyArray<{{$Type.Singular}}>, options: {{$Type.Singular}}CreateMultipleOptions, error: ErrorResponse },
     }
 {{end}}
-{{if $Type.CanUpdate}}
+{{if $Type.HasAPIUpdate}}
   | {
       type: 'X/{{Hash $Type.LowerPlural "/UPDATE_BEGIN"}}',
       payload: { record: {{$Type.Singular}}, timeout: number },
@@ -613,7 +614,7 @@ export function use{{$Type.Singular}}Fetch(id: ?{{if (EqualStrings $Type.IDField
   return { loading, record };
 }
 
-{{if $Type.CanCreate}}
+{{if $Type.HasAPICreate}}
 /** {{$Type.LowerPlural}}Create */
 export function {{$Type.LowerPlural}}Create(
   input: {{$Type.Singular}}CreateInput,
@@ -711,7 +712,7 @@ export function {{$Type.LowerPlural}}CreateMultiple(
 }
 {{end}}
 
-{{if $Type.CanUpdate}}
+{{if $Type.HasAPIUpdate}}
 /** {{$Type.LowerPlural}}Update */
 export function {{$Type.LowerPlural}}Update(
   input: {{$Type.Singular}},
@@ -943,7 +944,7 @@ export default function reducer(state: State = defaultState, action: Action): St
         fetchCache: updateFetchCacheErrorMulti(state.fetchCache, ids, time, error),
       };
     }
-{{if $Type.CanCreate}}
+{{if $Type.HasAPICreate}}
     case 'X/{{Hash $Type.LowerPlural "/CREATE_BEGIN"}}':
       return {
         ...state,
@@ -1000,7 +1001,7 @@ export default function reducer(state: State = defaultState, action: Action): St
       };
     }
 {{end}}
-{{if $Type.CanUpdate}}
+{{if $Type.HasAPIUpdate}}
     case 'X/{{Hash $Type.LowerPlural "/UPDATE_BEGIN"}}':
       return {
         ...state,

@@ -36,14 +36,13 @@ func (SchemaWriter) Imports(typeName string, namedType *types.Named, structType 
 }
 
 func (w *SchemaWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
-	d, err := getSQLTemplateData(typeName, namedType, structType)
+	w.pkgs = append(w.pkgs, w.PackageName(typeName, namedType, structType))
+
+	model, err := makeModel(typeName, namedType, structType)
 	if err != nil {
 		return err
 	}
-
-	w.pkgs = append(w.pkgs, w.PackageName(typeName, namedType, structType))
-
-	return schemaTemplate.Execute(wr, d)
+	return schemaTemplate.Execute(wr, *model)
 }
 
 func (w *SchemaWriter) Finish(dry bool) error {
@@ -56,14 +55,25 @@ func (w *SchemaWriter) Finish(dry bool) error {
 		fmt.Fprintf(buf, "  %q\n", "movingdata.com/p/wbi/models/modelschema/"+pkg)
 	}
 	fmt.Fprintf(buf, ")\n\n")
-	fmt.Fprintf(buf, "var Tables = map[string]apitypes.Table{\n")
+	fmt.Fprintf(buf, "var Tables = map[string]*sqlbuilder.Table{\n")
 	for _, pkg := range w.pkgs {
-		fmt.Fprintf(buf, "  %s.Schema.Name: %s.Schema,\n", filepath.Base(pkg), filepath.Base(pkg))
+		fmt.Fprintf(buf, "  %s.Model.GoName: %s.Table,\n", filepath.Base(pkg), filepath.Base(pkg))
+		fmt.Fprintf(buf, "  %s.Model.SQLName: %s.Table,\n", filepath.Base(pkg), filepath.Base(pkg))
 	}
-	fmt.Fprintf(buf, "}\n")
+	fmt.Fprintf(buf, "}\n\n")
+	fmt.Fprintf(buf, "var Models = map[string]*apitypes.Model{\n")
+	for _, pkg := range w.pkgs {
+		fmt.Fprintf(buf, "  %s.Model.GoName: %s.Model,\n", filepath.Base(pkg), filepath.Base(pkg))
+	}
+	fmt.Fprintf(buf, "}\n\n")
+	fmt.Fprintf(buf, "var Relations = flattenRelations(\n")
+	for _, pkg := range w.pkgs {
+		fmt.Fprintf(buf, "  %s.Relations,\n", filepath.Base(pkg))
+	}
+	fmt.Fprintf(buf, ")\n")
 
 	if !dry {
-		if err := ioutil.WriteFile(w.dir+"/modelschema/tables.go", buf.Bytes(), 0644); err != nil {
+		if err := ioutil.WriteFile(w.dir+"/modelschema/models.go", buf.Bytes(), 0644); err != nil {
 			return err
 		}
 	}
@@ -72,41 +82,60 @@ func (w *SchemaWriter) Finish(dry bool) error {
 }
 
 var schemaTemplate = template.Must(template.New("schemaTemplate").Funcs(tplFunc).Parse(`
-{{$Root := .}}
+{{$Type := .}}
 
-// Table is a symbolic identifier for the "{{$Root.TableName}}" table
+// Table is a symbolic identifier for the "{{$Type.SQLTableName}}" table
 var Table = sqlbuilder.NewTable(
-	"{{$Root.TableName}}",
-{{- range $Field := $Root.Fields}}
+	"{{$Type.SQLTableName}}",
+{{- range $Field := $Type.Fields}}
 	"{{$Field.SQLName}}",
 {{- end}}
 )
 
 var (
-{{- range $Field := $Root.Fields}}
-	// Column{{$Field.GoName}} is a symbolic identifier for the "{{$Root.TableName}}"."{{$Field.SQLName}}" column
+{{- range $Field := $Type.Fields}}
+	// Column{{$Field.GoName}} is a symbolic identifier for the "{{$Type.SQLTableName}}"."{{$Field.SQLName}}" column
 	Column{{$Field.GoName}} = Table.C("{{$Field.SQLName}}")
 {{- end}}
 )
 
-// Columns is a list of columns in the "{{$Root.TableName}}" table
+// Columns is a list of columns in the "{{$Type.SQLTableName}}" table
 var Columns = []*sqlbuilder.BasicColumn{
-{{- range $Field := $Root.Fields}}
+{{- range $Field := $Type.Fields}}
 	Column{{$Field.GoName}},
 {{- end}}
 }
 
-var Schema = apitypes.Table{
-	Name: "{{$Root.TableName}}",
-	Fields: []apitypes.TableField{
-{{- range $Field := $Root.Fields}}
-		apitypes.TableField{
-			Name: "{{$Field.SQLName}}",
-			Type: "{{$Field.SQLType}}",
+var Model = &apitypes.Model{
+	GoName: "{{$Type.Singular}}",
+	SQLName: "{{$Type.SQLTableName}}",
+	APIName: "{{$Type.LowerPlural}}",
+	Fields: []*apitypes.Field{
+{{- range $Field := $Type.Fields}}
+		&apitypes.Field{
+			GoName: "{{$Field.GoName}}",
+			GoType: "{{$Field.GoType}}",
+			SQLName: "{{$Field.SQLName}}",
+			SQLType: "{{$Field.SQLType}}",
+			APIName: "{{$Field.APIName}}",
+			APIType: "{{$Field.JSType}}",
 			Array: {{if $Field.Array}}true{{else}}false{{end}},
-			NotNull: {{if $Field.Pointer}}false{{else}}true{{end}},
+			NotNull: {{if $Field.IsNull}}false{{else}}true{{end}},
 		},
 {{- end}}
 	},
+}
+
+var Relations = []*apitypes.Relation{
+{{- range $Field := $Type.Fields}}
+{{- range $Ref := $Field.APIRefs}}
+	&apitypes.Relation{
+		SourceModel: "{{$Type.Singular}}",
+		SourceField: "{{$Field.GoName}}",
+		TargetModel: "{{$Ref.ModelName}}",
+		TargetField: "{{$Ref.FieldName}}",
+	},
+{{- end}}
+{{- end}}
 }
 `))

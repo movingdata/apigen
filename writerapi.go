@@ -1,10 +1,10 @@
 package main
 
 import (
-	"go/types"
-	"io"
-	"strings"
-	"text/template"
+  "go/types"
+  "io"
+  "strings"
+  "text/template"
 )
 
 type APIWriter struct{ dir string }
@@ -14,36 +14,37 @@ func NewAPIWriter(dir string) *APIWriter { return &APIWriter{dir: dir} }
 func (APIWriter) Name() string     { return "api" }
 func (APIWriter) Language() string { return "go" }
 func (w APIWriter) File(typeName string, _ *types.Named, _ *types.Struct) string {
-	return w.dir + "/" + strings.ToLower(typeName) + "_api.go"
+  return w.dir + "/" + strings.ToLower(typeName) + "_api.go"
 }
 
 func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []string {
-	return []string{
-		"encoding/csv",
-		"encoding/json",
-		"fmt",
-		"fknsrs.biz/p/civil",
-		"fknsrs.biz/p/sqlbuilder",
-		"github.com/gorilla/mux",
-		"github.com/satori/go.uuid",
-		"github.com/timewasted/go-accept-headers",
-		"movingdata.com/p/wbi/internal/apifilter",
-		"movingdata.com/p/wbi/internal/changeregistry",
-		"movingdata.com/p/wbi/internal/cookiesession",
-		"movingdata.com/p/wbi/internal/modelutil",
-		"movingdata.com/p/wbi/internal/traceregistry",
-		"movingdata.com/p/wbi/models/modelapifilter/" + strings.ToLower(typeName) + "apifilter",
-		"movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
-		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
-	}
+  return []string{
+    "encoding/csv",
+    "encoding/json",
+    "fmt",
+    "fknsrs.biz/p/civil",
+    "fknsrs.biz/p/sqlbuilder",
+    "github.com/gorilla/mux",
+    "github.com/satori/go.uuid",
+    "github.com/timewasted/go-accept-headers",
+    "movingdata.com/p/wbi/internal/apifilter",
+    "movingdata.com/p/wbi/internal/changeregistry",
+    "movingdata.com/p/wbi/internal/cookiesession",
+    "movingdata.com/p/wbi/internal/modelutil",
+    "movingdata.com/p/wbi/internal/modelrelations",
+    "movingdata.com/p/wbi/internal/traceregistry",
+    "movingdata.com/p/wbi/models/modelapifilter/" + strings.ToLower(typeName) + "apifilter",
+    "movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
+    "movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
+  }
 }
 
 func (w *APIWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
-	model, err := makeModel(typeName, namedType, structType)
-	if err != nil {
-		return err
-	}
-	return apiTemplate.Execute(wr, *model)
+  model, err := makeModel(typeName, namedType, structType)
+  if err != nil {
+    return err
+  }
+  return apiTemplate.Execute(wr, *model)
 }
 
 var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse(`
@@ -70,15 +71,15 @@ func init() {
 {{range $Field := $Type.Fields}}
 {{- if $Field.Enum}}
 func (jsctx *JSContext) {{$Type.Singular}}EnumValid{{$Field.GoName}}(v string) bool {
-  return {{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v]
+  return {{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[v]
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}EnumValues{{$Field.GoName}}() []string {
-  return {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}
+  return {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}
 }
 
 func (jsctx *JSContext) {{$Type.Singular}}EnumLabel{{$Field.GoName}}(v string) string {
-  return {{$Type.Singular | LC}}enum.Labels{{$Field.GoName}}[v]
+  return {{(PackageName "enum" $Type.Singular)}}.Labels{{$Field.GoName}}[v]
 }
 {{- end}}
 {{end}}
@@ -92,13 +93,13 @@ func (jsctx *JSContext) {{$Type.Singular}}Get(id {{$Type.IDField.GoType}}) *{{$T
 }
 
 func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContext, id {{$Type.IDField.GoType}}, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
-  qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
+  qb := sqlbuilder.Select().From({{(PackageName "schema" $Type.Singular)}}.Table).Columns(modelutil.ColumnsAsExpressions({{(PackageName "schema" $Type.Singular)}}.Columns)...)
 
-{{- if $Type.HasUserFilter}}
+{{if $Type.HasUserFilter}}
   qb = {{$Type.Singular}}UserFilter(qb, euid)
 {{- end}}
 
-  qb = qb.AndWhere(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
+  qb = qb.AndWhere(sqlbuilder.Eq({{(PackageName "schema" $Type.Singular)}}.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -106,13 +107,20 @@ func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContex
   }
 
   var v {{$Type.Singular}}
-  if err := db.QueryRowContext(ctx, qs, qv...).Scan({{range $i, $Field := $Type.Fields}}{{if $Field.Array}}pq.Array(&v.{{$Field.GoName}}){{else}}&v.{{$Field.GoName}}{{end}}, {{end}}); err != nil {
+{{range $Field := $Type.Fields}}
+  {{if $Field.ScanType}}var x{{$Field.GoName}} {{$Field.ScanType}}{{end}}
+{{- end}}
+  if err := db.QueryRowContext(ctx, qs, qv...).Scan({{range $i, $Field := $Type.Fields}}{{if $Field.ScanType}}&x{{$Field.GoName}}{{else if $Field.Array}}pq.Array(&v.{{$Field.GoName}}){{else}}&v.{{$Field.GoName}}{{end}}, {{end}}); err != nil {
     if err == sql.ErrNoRows {
       return nil, nil
     }
 
     return nil, fmt.Errorf("{{$Type.Singular}}APIGet: couldn't perform query: %w", err)
   }
+
+{{range $Field := $Type.Fields}}
+  {{if $Field.ScanType}}v.{{$Field.GoName}} = ({{$Field.GoType}})(x{{$Field.GoName}}){{end}}
+{{- end}}
 
   return &v, nil
 }
@@ -162,7 +170,7 @@ type {{$Type.Singular}}APISearchResponse struct {
   Time time.Time "json:\"time\""
 }
 
-func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular | LC}}apifilter.SearchParameters) *{{$Type.Singular}}APISearchResponse {
+func (jsctx *JSContext) {{$Type.Singular}}Search(p {{(PackageName "apifilter" $Type.Singular)}}.SearchParameters) *{{$Type.Singular}}APISearchResponse {
   v, err := {{$Type.Singular}}APISearch(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
@@ -170,8 +178,8 @@ func (jsctx *JSContext) {{$Type.Singular}}Search(p {{$Type.Singular | LC}}apifil
   return v
 }
 
-func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular | LC}}apifilter.SearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
-  qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
+func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{(PackageName "apifilter" $Type.Singular)}}.SearchParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}APISearchResponse, error) {
+  qb := sqlbuilder.Select().From({{(PackageName "schema" $Type.Singular)}}.Table).Columns(modelutil.ColumnsAsExpressions({{(PackageName "schema" $Type.Singular)}}.Columns)...)
 
 {{- if $Type.HasUserFilter}}
   qb = {{$Type.Singular}}UserFilter(qb, euid)
@@ -200,9 +208,16 @@ func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContex
   a := make([]*{{$Type.Singular}}, 0)
   for rows.Next() {
     var m {{$Type.Singular}}
-    if err := rows.Scan({{range $i, $Field := $Type.Fields}}{{if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}} /* {{$i}} */, {{end}}); err != nil {
+{{range $Field := $Type.Fields}}
+    {{if $Field.ScanType}}var x{{$Field.GoName}} {{$Field.ScanType}}{{end}}
+{{- end}}
+    if err := rows.Scan({{range $i, $Field := $Type.Fields}}{{if $Field.ScanType}}&x{{$Field.GoName}}{{else if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}} /* {{$i}} */, {{end}}); err != nil {
       return nil, fmt.Errorf("{{$Type.Singular}}APISearch: couldn't scan result row: %w", err)
     }
+
+{{range $Field := $Type.Fields}}
+    {{if $Field.ScanType}}m.{{$Field.GoName}} = ({{$Field.GoType}})(x{{$Field.GoName}}){{end}}
+{{- end}}
 
     a = append(a, &m)
   }
@@ -223,7 +238,7 @@ func {{$Type.Singular}}APISearch(ctx context.Context, db modelutil.QueryerContex
   }, nil
 }
 
-func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular | LC}}apifilter.FilterParameters) *{{$Type.Singular}} {
+func (jsctx *JSContext) {{$Type.Singular}}Find(p {{(PackageName "apifilter" $Type.Singular)}}.FilterParameters) *{{$Type.Singular}} {
   v, err := {{$Type.Singular}}APIFind(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
@@ -231,8 +246,8 @@ func (jsctx *JSContext) {{$Type.Singular}}Find(p {{$Type.Singular | LC}}apifilte
   return v
 }
 
-func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{$Type.Singular | LC}}apifilter.FilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
-  qb := sqlbuilder.Select().From({{$Type.Singular | LC}}schema.Table).Columns(modelutil.ColumnsAsExpressions({{$Type.Singular | LC}}schema.Columns)...)
+func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{(PackageName "apifilter" $Type.Singular)}}.FilterParameters, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
+  qb := sqlbuilder.Select().From({{(PackageName "schema" $Type.Singular)}}.Table).Columns(modelutil.ColumnsAsExpressions({{(PackageName "schema" $Type.Singular)}}.Columns)...)
 
 {{- if $Type.HasUserFilter}}
   qb = {{$Type.Singular}}UserFilter(qb, euid)
@@ -252,6 +267,9 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
   }
 
   var m {{$Type.Singular}}
+{{range $Field := $Type.Fields}}
+  {{if $Field.ScanType}}var x{{$Field.GoName}} {{$Field.ScanType}}{{end}}
+{{- end}}
   if err := db.QueryRowContext(ctx, qs1, qv1...).Scan({{range $i, $Field := $Type.Fields}}{{if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}}, {{end}}); err != nil {
     if err == sql.ErrNoRows {
       return nil, nil
@@ -259,6 +277,10 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
 
     return nil, fmt.Errorf("{{$Type.Singular}}APIFind: couldn't scan result row: %w", err)
   }
+
+{{range $Field := $Type.Fields}}
+  {{if $Field.ScanType}}m.{{$Field.GoName}} = ({{$Field.GoType}})(x{{$Field.GoName}}){{end}}
+{{- end}}
 
   var total int
   if err := db.QueryRowContext(ctx, qs2, qv2...).Scan(&total); err != nil {
@@ -273,7 +295,7 @@ func {{$Type.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContextA
 }
 
 func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
-  var p {{$Type.Singular | LC}}apifilter.SearchParameters
+  var p {{(PackageName "apifilter" $Type.Singular)}}.SearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
   }
@@ -297,7 +319,7 @@ func {{$Type.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, 
 }
 
 func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
-  var p {{$Type.Singular | LC}}apifilter.SearchParameters
+  var p {{(PackageName "apifilter" $Type.Singular)}}.SearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
     panic(err)
   }
@@ -326,7 +348,7 @@ func {{$Type.Singular}}APIHandleSearchCSV(rw http.ResponseWriter, r *http.Reques
   wr.Flush()
 }
 
-{{if (or $Type.CanCreate $Type.CanUpdate)}}
+{{if (or $Type.HasAPICreate $Type.HasAPIUpdate)}}
 type {{$Type.Singular}}FieldMask struct {
 {{range $Field := $Type.Fields}}
   {{$Field.GoName}} bool
@@ -485,7 +507,7 @@ func (h *{{$Type.Singular}}BeforeSaveHandler) Match(a, b *{{$Type.Singular}}) bo
 }
 {{end}}
 
-{{if $Type.CanCreate}}
+{{if $Type.HasAPICreate}}
 func (jsctx *JSContext) {{$Type.Singular}}Create(input {{$Type.Singular}}) *{{$Type.Singular}} {
   v, err := {{$Type.Singular}}APICreate(modelutil.WithPathEntry(jsctx.ctx, fmt.Sprintf("JS#{{$Type.Singular}}Create#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), &input, nil)
   if err != nil {
@@ -521,13 +543,13 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 {{- if $Field.Enum}}
 {{- if $Field.Array}}
   for i, v := range input.{{$Field.GoName}} {
-    if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[v] {
+      return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
   }
 {{- else}}
-  if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+  if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
   }
 {{- end}}
 {{- end}}
@@ -551,39 +573,53 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
 {{- end}}
 {{end}}
 
-{{if $Type.HasVersion -}}
-  input.Version = 1
-  ic[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
+{{- if $Type.HasID}}
+  ic[{{(PackageName "schema" $Type.Singular)}}.ColumnID] = sqlbuilder.Bind(input.ID)
 {{- if $Type.HasAudit}}
-  fields["Version"] = []interface{}{input.Version}
+  fields["ID"] = []interface{}{input.ID}
 {{- end}}
 {{- end}}
-{{if $Type.HasCreatedAt -}}
+{{- if $Type.HasCreatedAt}}
   input.CreatedAt = now
-  ic[{{$Type.Singular | LC}}schema.ColumnCreatedAt] = sqlbuilder.Bind(input.CreatedAt)
+  ic[{{(PackageName "schema" $Type.Singular)}}.ColumnCreatedAt] = sqlbuilder.Bind(input.CreatedAt)
 {{- if $Type.HasAudit}}
   fields["CreatedAt"] = []interface{}{input.CreatedAt}
 {{- end}}
 {{- end}}
-{{if $Type.HasUpdatedAt -}}
+{{- if $Type.HasUpdatedAt}}
   input.UpdatedAt = now
-  ic[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
+  ic[{{(PackageName "schema" $Type.Singular)}}.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
 {{- if $Type.HasAudit}}
   fields["UpdatedAt"] = []interface{}{input.UpdatedAt}
 {{- end}}
 {{- end}}
-{{if $Type.HasCreatorID -}}
+{{- if $Type.HasCreatorID}}
   input.CreatorID = euid
-  ic[{{$Type.Singular | LC}}schema.ColumnCreatorID] = sqlbuilder.Bind(input.CreatorID)
+  ic[{{(PackageName "schema" $Type.Singular)}}.ColumnCreatorID] = sqlbuilder.Bind(input.CreatorID)
 {{- if $Type.HasAudit}}
   fields["CreatorID"] = []interface{}{input.CreatorID}
 {{- end}}
 {{- end}}
-{{if $Type.HasUpdaterID -}}
+{{- if $Type.HasUpdaterID}}
   input.UpdaterID = euid
-  ic[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
+  ic[{{(PackageName "schema" $Type.Singular)}}.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
 {{- if $Type.HasAudit}}
   fields["UpdaterID"] = []interface{}{input.UpdaterID}
+{{- end}}
+{{- end}}
+{{- if $Type.HasVersion}}
+  switch input.Version {
+  case 0:
+    // initialise to 1 if not supplied
+    input.Version = 1
+  case 1:
+    // nothing
+  default:
+    return nil, fmt.Errorf("{{$Type.Singular}}APICreate: Version from input should be 0 or 1; was instead %d: %w", input.Version, ErrVersionMismatch)
+  }
+  ic[{{(PackageName "schema" $Type.Singular)}}.ColumnVersion] = sqlbuilder.Bind(input.Version)
+{{- if $Type.HasAudit}}
+  fields["Version"] = []interface{}{input.Version}
 {{- end}}
 {{- end}}
 
@@ -698,38 +734,38 @@ func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelConte
     }
   {{- end}}
 
-  {{- if not (or $Field.IgnoreInput) }}
+  {{- if not $Field.IgnoreCreate }}
     {{- if $Field.Enum}}
       {{- if $Field.Array}}
         for i, v := range input.{{$Field.GoName}} {
-          if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-            return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+          if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[v] {
+            return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
           }
         }
       {{- else}}
-        if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-          return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+        if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+          return nil, fmt.Errorf("{{$Type.Singular}}APICreate: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
         }
       {{- end}}
     {{- end}}
 
-    ic[{{$Type.Singular | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
+    ic[{{(PackageName "schema" $Type.Singular)}}.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
 
     {{- if $Type.HasAudit}}
       fields["{{$Field.GoName}}"] = []interface{}{input.{{$Field.GoName}}}
     {{- end}}
-  {{- else if not (or $Field.IgnoreInput $Field.IsNull) }}
+  {{- else if not (or $Field.IgnoreCreate $Field.IsNull) }}
     {{- if $Field.Array}}
       empty{{$Field.GoName}} := make({{$Field.GoType}}, 0)
     {{- else}}
       var empty{{$Field.GoName}} {{$Field.GoType}}
     {{- end}}
 
-    ic[{{$Type.Singular | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(empty{{$Field.GoName}}){{else}}empty{{$Field.GoName}}{{end}})
+    ic[{{(PackageName "schema" $Type.Singular)}}.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(empty{{$Field.GoName}}){{else}}empty{{$Field.GoName}}{{end}})
   {{- end}}
 {{- end}}
 
-  qb := sqlbuilder.Insert().Table({{$Type.Singular | LC}}schema.Table).Columns(ic)
+  qb := sqlbuilder.Insert().Table({{(PackageName "schema" $Type.Singular)}}.Table).Columns(ic)
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -924,7 +960,7 @@ func {{$Type.Singular}}APIHandleCreateMultiple(rw http.ResponseWriter, r *http.R
 }
 {{end}}
 
-{{if $Type.CanUpdate}}
+{{if $Type.HasAPIUpdate}}
 func (jsctx *JSContext) {{$Type.Singular}}Save(input *{{$Type.Singular}}) *{{$Type.Singular}} {
   v, err := {{$Type.Singular}}APISave(modelutil.WithPathEntry(jsctx.ctx, fmt.Sprintf("JS#{{$Type.Singular}}Save#{{FormatTemplate $Type.IDField.GoType}}", input.ID)), jsctx.mctx, jsctx.tx, jsctx.uid, jsctx.euid, time.Now(), input, nil)
   if err != nil {
@@ -962,19 +998,19 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 {{end}}
 
 {{range $Field := $Type.Fields}}
-{{- if $Field.IgnoreInput }}
+{{- if $Field.IgnoreUpdate }}
   input.{{$Field.GoName}} = p.{{$Field.GoName}}
 {{- end}}
 {{- if $Field.Enum}}
 {{- if $Field.Array}}
   for i, v := range input.{{$Field.GoName}} {
-    if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-      return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[v] {
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
   }
 {{- else}}
-  if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-    return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+  if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+    return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
   }
 {{- end}}
 {{- end}}
@@ -1109,25 +1145,25 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
   skip := true
 
 {{range $Field := $Type.Fields}}
-{{- if not $Field.IgnoreInput}}
+{{- if not $Field.IgnoreUpdate}}
   if {{ (NotEqual (Join "input." $Field.GoName) $Field.GoType (Join "p." $Field.GoName) $Field.GoType) }} {
     skip = false
 
 {{- if $Field.Enum}}
 {{- if $Field.Array}}
     for i, v := range input.{{$Field.GoName}} {
-      if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[v] {
-        return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+      if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[v] {
+        return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for member %d of field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", i, {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
       }
     }
 {{- else}}
-    if !{{$Type.Singular | LC}}enum.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
-      return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{$Type.Singular | LC}}enum.Values{{$Field.GoName}}, input.{{$Field.GoName}})
+    if !{{(PackageName "enum" $Type.Singular)}}.Valid{{$Field.GoName}}[input.{{$Field.GoName}}] {
+      return nil, fmt.Errorf("{{$Type.Singular}}APISave: value for field \"{{$Field.APIName}}\" was incorrect; expected one of %v but got %q", {{(PackageName "enum" $Type.Singular)}}.Values{{$Field.GoName}}, input.{{$Field.GoName}})
     }
 {{- end}}
 {{- end}}
 
-    uc[{{$Type.Singular | LC}}schema.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
+    uc[{{(PackageName "schema" $Type.Singular)}}.Column{{$Field.GoName}}] = sqlbuilder.Bind({{if $Field.Array}}pq.Array(input.{{$Field.GoName}}){{else}}input.{{$Field.GoName}}{{end}})
 {{- if $Type.HasAudit}}
     changed["{{$Field.GoName}}"] = []interface{}{p.{{$Field.GoName}}, input.{{$Field.GoName}}}
 {{- end}}
@@ -1136,27 +1172,27 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 {{- end}}
 
   if skip == false {
-{{if $Type.HasVersion -}}
+{{- if $Type.HasVersion}}
     input.Version = input.Version + 1
-    uc[{{$Type.Singular | LC}}schema.ColumnVersion] = sqlbuilder.Bind(input.Version)
+    uc[{{(PackageName "schema" $Type.Singular)}}.ColumnVersion] = sqlbuilder.Bind(input.Version)
 {{- if $Type.HasAudit}}
     if input.Version != p.Version {
       changed["Version"] = []interface{}{p.Version, input.Version}
     }
 {{- end}}
 {{- end}}
-{{if $Type.HasUpdatedAt -}}
+{{- if $Type.HasUpdatedAt}}
     input.UpdatedAt = now
-    uc[{{$Type.Singular | LC}}schema.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
+    uc[{{(PackageName "schema" $Type.Singular)}}.ColumnUpdatedAt] = sqlbuilder.Bind(input.UpdatedAt)
 {{- if $Type.HasAudit}}
     if !input.UpdatedAt.Equal(p.UpdatedAt) {
       changed["UpdatedAt"] = []interface{}{p.UpdatedAt, input.UpdatedAt}
     }
 {{- end}}
 {{- end}}
-{{if $Type.HasUpdaterID -}}
+{{- if $Type.HasUpdaterID}}
     input.UpdaterID = euid
-    uc[{{$Type.Singular | LC}}schema.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
+    uc[{{(PackageName "schema" $Type.Singular)}}.ColumnUpdaterID] = sqlbuilder.Bind(input.UpdaterID)
 {{- if $Type.HasAudit}}
     if input.UpdaterID != p.UpdaterID {
       changed["UpdaterID"] = []interface{}{p.UpdaterID, input.UpdaterID}
@@ -1164,7 +1200,7 @@ func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext
 {{- end}}
 {{- end}}
 
-    qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(uc).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(input.ID)))
+    qb := sqlbuilder.Update().Table({{(PackageName "schema" $Type.Singular)}}.Table).Set(uc).Where(sqlbuilder.Eq({{(PackageName "schema" $Type.Singular)}}.ColumnID, sqlbuilder.Bind(input.ID)))
 
     qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
     if err != nil {
@@ -1370,9 +1406,9 @@ func {{$Type.Singular}}APIChangeCreatedAt(ctx context.Context, mctx *modelutil.M
     return fmt.Errorf("{{$Type.Singular}}APIChangeCreatedAt: createdAt was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular | LC}}schema.ColumnCreatedAt: sqlbuilder.Bind(createdAt),
-  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{(PackageName "schema" $Type.Singular)}}.Table).Set(sqlbuilder.UpdateColumns{
+    {{(PackageName "schema" $Type.Singular)}}.ColumnCreatedAt: sqlbuilder.Bind(createdAt),
+  }).Where(sqlbuilder.Eq({{(PackageName "schema" $Type.Singular)}}.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1402,9 +1438,9 @@ func {{$Type.Singular}}APIChangeCreatorID(ctx context.Context, mctx *modelutil.M
     return fmt.Errorf("{{$Type.Singular}}APIChangeCreatorID: creatorID was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular | LC}}schema.ColumnCreatorID: sqlbuilder.Bind(creatorID),
-  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{(PackageName "schema" $Type.Singular)}}.Table).Set(sqlbuilder.UpdateColumns{
+    {{(PackageName "schema" $Type.Singular)}}.ColumnCreatorID: sqlbuilder.Bind(creatorID),
+  }).Where(sqlbuilder.Eq({{(PackageName "schema" $Type.Singular)}}.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1434,9 +1470,9 @@ func {{$Type.Singular}}APIChangeUpdatedAt(ctx context.Context, mctx *modelutil.M
     return fmt.Errorf("{{$Type.Singular}}APIChangeUpdatedAt: updatedAt was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular | LC}}schema.ColumnUpdatedAt: sqlbuilder.Bind(updatedAt),
-  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{(PackageName "schema" $Type.Singular)}}.Table).Set(sqlbuilder.UpdateColumns{
+    {{(PackageName "schema" $Type.Singular)}}.ColumnUpdatedAt: sqlbuilder.Bind(updatedAt),
+  }).Where(sqlbuilder.Eq({{(PackageName "schema" $Type.Singular)}}.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {
@@ -1466,9 +1502,9 @@ func {{$Type.Singular}}APIChangeUpdaterID(ctx context.Context, mctx *modelutil.M
     return fmt.Errorf("{{$Type.Singular}}APIChangeUpdaterID: updaterID was empty")
   }
 
-  qb := sqlbuilder.Update().Table({{$Type.Singular | LC}}schema.Table).Set(sqlbuilder.UpdateColumns{
-    {{$Type.Singular | LC}}schema.ColumnUpdaterID: sqlbuilder.Bind(updaterID),
-  }).Where(sqlbuilder.Eq({{$Type.Singular | LC}}schema.ColumnID, sqlbuilder.Bind(id)))
+  qb := sqlbuilder.Update().Table({{(PackageName "schema" $Type.Singular)}}.Table).Set(sqlbuilder.UpdateColumns{
+    {{(PackageName "schema" $Type.Singular)}}.ColumnUpdaterID: sqlbuilder.Bind(updaterID),
+  }).Where(sqlbuilder.Eq({{(PackageName "schema" $Type.Singular)}}.ColumnID, sqlbuilder.Bind(id)))
 
   qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
   if err != nil {

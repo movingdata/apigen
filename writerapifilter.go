@@ -111,7 +111,7 @@ func (p *FilterParameters) AddFilters(q *sqlbuilder.SelectStatement) *sqlbuilder
     return q
   }
 
-  a := apifilter.BuildFilters({{$Type.Singular | LC}}schema.Table, p)
+  a := apifilter.BuildFilters({{(PackageName "schema" $Type.Singular)}}.Table, p)
 
 {{range $Filter := $Type.SpecialFilters}}
 {{- if eq $Filter.GoType "*uuid.UUID"}}
@@ -169,7 +169,7 @@ func (p *SearchParameters) AddLimits(q *sqlbuilder.SelectStatement) *sqlbuilder.
       switch s {
 {{- range $Field := $Type.Fields}}
       case "{{$Field.APIName}}":
-        fld = {{$Type.Singular | LC}}schema.Column{{$Field.GoName}}
+        fld = {{(PackageName "schema" $Type.Singular)}}.Column{{$Field.GoName}}
 {{- end}}
 {{- range $Field := $Type.SpecialOrders}}
       case "{{$Field.APIName}}":
