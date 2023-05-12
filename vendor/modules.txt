@@ -1,15 +1,16 @@
-# fknsrs.biz/p/apitypes v1.3.0
-## explicit
-fknsrs.biz/p/apitypes
 # github.com/danverbraganza/varcaser v0.0.0-20190207223536-e3fb03ee5b4c
 ## explicit
 github.com/danverbraganza/varcaser/varcaser
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew/spew
 # github.com/grsmv/inflect v0.0.0-20140723132642-a28d3de3b3ad
 ## explicit
 github.com/grsmv/inflect
-# github.com/pkg/errors v0.9.1
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
+# github.com/stretchr/testify v1.8.1
 ## explicit
-github.com/pkg/errors
+github.com/stretchr/testify/assert
 # golang.org/x/mod v0.2.0
 golang.org/x/mod/module
 golang.org/x/mod/semver
@@ -36,3 +37,5 @@ golang.org/x/tools/internal/typesinternal
 # golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
+# gopkg.in/yaml.v3 v3.0.1
+gopkg.in/yaml.v3
