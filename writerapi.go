@@ -1,10 +1,10 @@
 package main
 
 import (
-  "go/types"
-  "io"
-  "strings"
-  "text/template"
+	"go/types"
+	"io"
+	"strings"
+	"text/template"
 )
 
 type APIWriter struct{ dir string }
@@ -14,37 +14,38 @@ func NewAPIWriter(dir string) *APIWriter { return &APIWriter{dir: dir} }
 func (APIWriter) Name() string     { return "api" }
 func (APIWriter) Language() string { return "go" }
 func (w APIWriter) File(typeName string, _ *types.Named, _ *types.Struct) string {
-  return w.dir + "/" + strings.ToLower(typeName) + "_api.go"
+	return w.dir + "/" + strings.ToLower(typeName) + "_api.go"
 }
 
 func (APIWriter) Imports(typeName string, _ *types.Named, _ *types.Struct) []string {
-  return []string{
-    "encoding/csv",
-    "encoding/json",
-    "fmt",
-    "fknsrs.biz/p/civil",
-    "fknsrs.biz/p/sqlbuilder",
-    "github.com/gorilla/mux",
-    "github.com/satori/go.uuid",
-    "github.com/timewasted/go-accept-headers",
-    "movingdata.com/p/wbi/internal/apifilter",
-    "movingdata.com/p/wbi/internal/changeregistry",
-    "movingdata.com/p/wbi/internal/cookiesession",
-    "movingdata.com/p/wbi/internal/modelutil",
-    "movingdata.com/p/wbi/internal/modelrelations",
-    "movingdata.com/p/wbi/internal/traceregistry",
-    "movingdata.com/p/wbi/models/modelapifilter/" + strings.ToLower(typeName) + "apifilter",
-    "movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
-    "movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
-  }
+	return []string{
+		"encoding/csv",
+		"encoding/json",
+		"fmt",
+		"fknsrs.biz/p/civil",
+		"fknsrs.biz/p/sqlbuilder",
+		"github.com/gorilla/mux",
+		"github.com/satori/go.uuid",
+		"github.com/timewasted/go-accept-headers",
+		"movingdata.com/p/wbi/internal/apifilter",
+		"movingdata.com/p/wbi/internal/changeregistry",
+		"movingdata.com/p/wbi/internal/cookiesession",
+		"movingdata.com/p/wbi/internal/modelutil",
+		"movingdata.com/p/wbi/internal/modelrelations",
+		"movingdata.com/p/wbi/internal/retrydb",
+		"movingdata.com/p/wbi/internal/traceregistry",
+		"movingdata.com/p/wbi/models/modelapifilter/" + strings.ToLower(typeName) + "apifilter",
+		"movingdata.com/p/wbi/models/modelenum/" + strings.ToLower(typeName) + "enum",
+		"movingdata.com/p/wbi/models/modelschema/" + strings.ToLower(typeName) + "schema",
+	}
 }
 
 func (w *APIWriter) Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error {
-  model, err := makeModel(typeName, namedType, structType)
-  if err != nil {
-    return err
-  }
-  return apiTemplate.Execute(wr, *model)
+	model, err := makeModel(typeName, namedType, structType)
+	if err != nil {
+		return err
+	}
+	return apiTemplate.Execute(wr, *model)
 }
 
 var apiTemplate = template.Must(template.New("apiTemplate").Funcs(tplFunc).Parse(`
@@ -90,6 +91,19 @@ func (jsctx *JSContext) {{$Type.Singular}}Get(id {{$Type.IDField.GoType}}) *{{$T
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
+}
+
+func (v *{{$Type.Singular}}) APIGet(ctx context.Context, db modelutil.RowQueryerContext, id {{$Type.IDField.GoType}}, uid, euid *uuid.UUID) error {
+  vv, err := {{$Type.Singular}}APIGet(ctx, db, id, uid, euid)
+  if err != nil {
+    return fmt.Errorf("{{$Type.Singular}}.APIGet: %w", err)
+  } else if vv == nil {
+    return fmt.Errorf("{{$Type.Singular}}.APIGet: could not find record {{$Type.IDField.FormatType}}", id)
+  }
+
+  *v = *vv
+
+  return nil
 }
 
 func {{$Type.Singular}}APIGet(ctx context.Context, db modelutil.RowQueryerContext, id {{$Type.IDField.GoType}}, uid, euid *uuid.UUID) (*{{$Type.Singular}}, error) {
@@ -522,6 +536,19 @@ func (jsctx *JSContext) {{$Type.Singular}}CreateWithOptions(input {{$Type.Singul
     panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
   }
   return v
+}
+
+func (v *{{$Type.Singular}}) APICreate(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, options *modelutil.APIOptions) error {
+  vv, err := {{$Type.Singular}}APICreate(ctx, mctx, tx, uid, euid, now, v, options)
+  if err != nil {
+    return fmt.Errorf("{{$Type.Singular}}.APICreate: %w", err)
+  } else if vv == nil {
+    return fmt.Errorf("{{$Type.Singular}}.APICreate: {{$Type.Singular}}APICreate did not return a valid record")
+  }
+
+  *v = *vv
+
+  return nil
 }
 
 func {{$Type.Singular}}APICreate(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
@@ -977,7 +1004,28 @@ func (jsctx *JSContext) {{$Type.Singular}}SaveWithOptions(input *{{$Type.Singula
   return v
 }
 
-func {{$Type.Singular}}APISave(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, input *{{$Type.Singular}}, options *modelutil.APIOptions) (*{{$Type.Singular}}, error) {
+func (v *{{$Type.Singular}}) APISave(ctx context.Context, mctx *modelutil.ModelContext, tx *sql.Tx, uid, euid uuid.UUID, now time.Time, options *modelutil.APIOptions) error {
+  vv, err := {{$Type.Singular}}APISave(ctx, mctx, tx, uid, euid, now, v, options)
+  if err != nil {
+    return fmt.Errorf("{{$Type.Singular}}.APISave: %w", err)
+  } else if vv == nil {
+    return fmt.Errorf("{{$Type.Singular}}.APISave: {{$Type.Singular}}APISave did not return a valid record")
+  }
+
+  *v = *vv
+
+  return nil
+}
+
+func {{$Type.Singular}}APISave(
+  ctx context.Context,
+  mctx *modelutil.ModelContext,
+  tx *sql.Tx,
+  uid, euid uuid.UUID,
+  now time.Time,
+  input *{{$Type.Singular}},
+  options *modelutil.APIOptions,
+) (*{{$Type.Singular}}, error) {
   if input.ID == {{if (EqualStrings $Type.IDField.GoType "int")}}0{{else}}uuid.Nil{{end}} {
     return nil, fmt.Errorf("{{$Type.Singular}}APISave: ID field was empty")
   }
@@ -1389,6 +1437,101 @@ func {{$Type.Singular}}APIHandleSaveMultiple(rw http.ResponseWriter, r *http.Req
     panic(err)
   }
 }
+
+func {{$Type.Singular}}APIFindAndModify(
+  ctx context.Context,
+  mctx *modelutil.ModelContext,
+  tx *sql.Tx,
+  uid, euid uuid.UUID,
+  now time.Time,
+  id {{$Type.IDField.GoType}},
+  options *modelutil.APIOptions,
+  modify func(v *{{$Type.Singular}}) error,
+) (*{{$Type.Singular}}, error) {
+  v, err := {{$Type.Singular}}APIGet(ctx, tx, id, &uid, &euid)
+  if err != nil {
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFindAndModify: error fetching record {{$Type.IDField.FormatType}}: %w", id, err)
+  } else if v == nil {
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFindAndModify: could not find record {{$Type.IDField.FormatType}}", id)
+  }
+
+  if err := modify(v); err != nil {
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFindAndModify: error modifying record {{$Type.IDField.FormatType}}: %w", id, err)
+  }
+
+  vv, err := {{$Type.Singular}}APISave(ctx, mctx, tx, uid, euid, now, v, options)
+  if err != nil {
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFindAndModify: error saving record {{$Type.IDField.FormatType}}: %w", id, err)
+  }
+
+  return vv, nil
+}
+
+func (v *{{$Type.Singular}}) APIFindAndModify(
+  ctx context.Context,
+  mctx *modelutil.ModelContext,
+  tx *sql.Tx,
+  uid, euid uuid.UUID,
+  now time.Time,
+  options *modelutil.APIOptions,
+  modify func(v *{{$Type.Singular}}) error,
+) error {
+  vv, err := {{$Type.Singular}}APIFindAndModify(ctx, mctx, tx, uid, euid, now, v.ID, options, modify)
+  if err != nil {
+    return fmt.Errorf("{{$Type.Singular}}.APIFindAndModify: %w", err)
+  }
+
+  *v = *vv
+
+  return nil
+}
+
+func {{$Type.Singular}}APIFindAndModifyOutsideTransaction(
+  ctx context.Context,
+  mctx *modelutil.ModelContext,
+  db *sql.DB,
+  uid, euid uuid.UUID,
+  now time.Time,
+  id {{$Type.IDField.GoType}},
+  options *modelutil.APIOptions,
+  modify func(v *{{$Type.Singular}}) error,
+) (*{{$Type.Singular}}, error) {
+  var out *{{$Type.Singular}}
+
+  if err := retrydb.LinearBackoff(db, 5, time.Millisecond*500, func(tx *sql.Tx) error {
+    v, err := {{$Type.Singular}}APIFindAndModify(ctx, mctx, tx, uid, euid, now, id, options, modify)
+    if err != nil {
+      return err
+    }
+
+    out = v
+
+    return nil
+  }); err != nil {
+    return nil, fmt.Errorf("{{$Type.Singular}}APIFindAndModifyOutsideTransaction: %w", err)
+  }
+
+  return out, nil
+}
+
+func (v *{{$Type.Singular}}) APIFindAndModifyOutsideTransaction(
+  ctx context.Context,
+  mctx *modelutil.ModelContext,
+  db *sql.DB,
+  uid, euid uuid.UUID,
+  now time.Time,
+  options *modelutil.APIOptions,
+  modify func(v *{{$Type.Singular}}) error,
+) error {
+  vv, err := {{$Type.Singular}}APIFindAndModifyOutsideTransaction(ctx, mctx, db, uid, euid, now, v.ID, options, modify)
+  if err != nil {
+    return fmt.Errorf("{{$Type.Singular}}.APIFindAndModifyOutsideTransaction: %w", err)
+  }
+
+  *v = *vv
+
+  return nil
+}
 {{end}}
 
 {{if $Type.HasCreatedAt}}
@@ -1539,5 +1682,44 @@ func {{$Type.Singular}}APISet{{$Field.GoName}}IfEmpty(ctx context.Context, tx *s
   return nil
 }
 {{- end}}
+{{end}}
+
+{{range $Process := $Type.Processes}}
+type {{$Type.Singular}}Process{{$Process}} struct { Value *{{$Type.Singular}} }
+
+func (v *{{$Type.Singular}}) ProcessFor{{$Process}}() *{{$Type.Singular}}Process{{$Process}} {
+  return &{{$Type.Singular}}Process{{$Process}}{Value: v}
+}
+
+func (p *{{$Type.Singular}}Process{{$Process}}) Name() string {
+  return "{{$Type.Singular}}.{{$Process}}"
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) GetStatus() string {
+  return p.Value.{{$Process}}Status
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) GetCompletedAt() *time.Time {
+  return p.Value.{{$Process}}CompletedAt
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) SetCompletedAt(completedAt *time.Time) {
+  p.Value.{{$Process}}CompletedAt = completedAt
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) GetStartedAt() *time.Time {
+  return p.Value.{{$Process}}StartedAt
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) SetStartedAt(startedAt *time.Time) {
+  p.Value.{{$Process}}StartedAt = startedAt
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) GetDeadline() *time.Time {
+  return p.Value.{{$Process}}Deadline
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) SetDeadline(deadline *time.Time) {
+  p.Value.{{$Process}}Deadline = deadline
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) GetFailureMessage() string {
+  return p.Value.{{$Process}}FailureMessage
+}
+func (p *{{$Type.Singular}}Process{{$Process}}) SetFailureMessage(failureMessage string) {
+  p.Value.{{$Process}}FailureMessage = failureMessage
+}
 {{end}}
 `))

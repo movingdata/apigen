@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -140,18 +141,27 @@ func main() {
 			os.Exit(1)
 		}
 
-		var filterMap map[string]bool
+		var filters []*regexp.Regexp
 		if filter != "" {
-			filterMap = make(map[string]bool)
-
 			for _, e := range strings.Split(filter, ",") {
-				filterMap[e] = true
+				filters = append(filters, regexp.MustCompile("^"+e+"$"))
 			}
 		}
 
 		for _, typeName := range pkg.Types.Scope().Names() {
-			if len(filterMap) > 0 && !filterMap[typeName] {
-				continue
+			if len(filters) > 0 {
+				match := false
+
+				for _, f := range filters {
+					if f.MatchString(typeName) {
+						match = true
+						break
+					}
+				}
+
+				if !match {
+					continue
+				}
 			}
 
 			obj := pkg.Types.Scope().Lookup(typeName)

@@ -292,6 +292,12 @@ var scanTypes = map[string]string{
 	"[]time.Duration": "sqltypes.DurationArray",
 }
 
+var formatTypes = map[string]string{
+	"string":    "%s",
+	"uuid.UUID": "%s",
+	"int":       "%d",
+}
+
 var jsTypes = map[string]string{
 	"string":          "string",
 	"int":             "number",
@@ -547,10 +553,12 @@ type Model struct {
 
 	IDField      *Field
 	VersionField *Field
-	Fields       []Field
+	Fields       FieldList
 
 	SpecialOrders  []SpecialOrder
 	SpecialFilters []Filter
+
+	Processes []string
 
 	HasID        bool
 	HasVersion   bool
@@ -579,9 +587,10 @@ type Field struct {
 	IsNull bool
 	Array  bool
 
-	GoName   string
-	GoType   string
-	ScanType string
+	GoName     string
+	GoType     string
+	ScanType   string
+	FormatType string
 
 	SQLName string
 	SQLType string
@@ -596,21 +605,53 @@ type Field struct {
 	IgnoreCreate   bool
 	IgnoreUpdate   bool
 	OmitEmpty      bool
-	Enum           Enums
+	Enum           EnumList
 	Sequence       string
 	SequencePrefix string
 }
 
-type Fields []Field
+func (f Field) HasEnumValue(value string) bool {
+	return f.Enum.HasValue(value)
+}
 
-func (f Fields) GetByGoName(name string) *Field {
-	for _, e := range f {
-		if e.GoName == name {
-			return &e
+func (f Field) HasEnumValues(values []string) bool {
+	return f.Enum.HasValues(values)
+}
+
+type FieldList []Field
+
+func (l FieldList) GetByName(name string) *Field {
+	for _, f := range l {
+		if f.GoName == name || f.SQLName == name || f.APIName == name {
+			return &f
 		}
 	}
 
 	return nil
+}
+
+func (l FieldList) GetByNameAndType(name, typ string) *Field {
+	if f := l.GetByName(name); f != nil {
+		if f.GoType == typ || f.SQLType == typ || f.JSType == typ {
+			return f
+		}
+	}
+
+	return nil
+}
+
+func (l FieldList) HasFieldWithNameAndType(name, typ string) bool {
+	return l.GetByNameAndType(name, typ) != nil
+}
+
+func (l FieldList) HasFieldsWithNamesAndTypes(pairs [][2]string) bool {
+	for _, pair := range pairs {
+		if !l.HasFieldWithNameAndType(pair[0], pair[1]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 type APIRef struct {
@@ -624,10 +665,43 @@ type Enum struct {
 	GoName string
 }
 
-type Enums []Enum
+type EnumList []Enum
 
-func (e Enums) First() Enum {
-	return e[0]
+func (l EnumList) First() Enum {
+	return l[0]
+}
+
+func (l EnumList) Values() []string {
+	a := make([]string, len(l))
+	for i, e := range l {
+		a[i] = e.Value
+	}
+
+	return a
+}
+
+func (l EnumList) GetByValue(value string) *Enum {
+	for _, e := range l {
+		if e.Value == value {
+			return &e
+		}
+	}
+
+	return nil
+}
+
+func (l EnumList) HasValue(value string) bool {
+	return l.GetByValue(value) != nil
+}
+
+func (l EnumList) HasValues(values []string) bool {
+	for _, e := range values {
+		if !l.HasValue(e) {
+			return false
+		}
+	}
+
+	return true
 }
 
 type SpecialOrder struct {
@@ -674,7 +748,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		lowerPlural        = upperCamelLowerCamelCaps.To.Join(words)
 		lowerSnakePlural   = pluralFor(typeName)
 		sqlTableName       = pluralFor(typeName)
-		fields             Fields
+		fields             FieldList
 		specialOrders      []SpecialOrder
 		specialFilters     []Filter
 		hasID              = false
@@ -779,11 +853,11 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			hasSQLSave = true
 		}
 
-		var enums Enums
+		var enums EnumList
 		if s := getTagIndex(structType, i, "enum"); s != "" {
 			a := strings.Split(s[1:], string(s[0]))
 
-			enums = make(Enums, len(a))
+			enums = make(EnumList, len(a))
 
 			for i, s := range a {
 				b := strings.SplitN(s, ":", 3)
@@ -947,6 +1021,10 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 		if scanType := scanTypes[gf.GoType]; scanType != "" {
 			gf.ScanType = scanType
+		}
+
+		if formatType := formatTypes[gf.GoType]; formatType != "" {
+			gf.FormatType = formatType
 		}
 
 		for range apiTagOptions["userFilter"] {
@@ -1173,6 +1251,37 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		}
 	}
 
+	var processes []string
+
+	for _, f := range fields {
+		if !strings.HasSuffix(f.GoName, "JobID") {
+			continue
+		}
+
+		processName := strings.TrimSuffix(f.GoName, "JobID")
+
+		if !fields.HasFieldsWithNamesAndTypes([][2]string{
+			{processName + "Status", "string"},
+			{processName + "JobID", "*int"},
+			{processName + "StartedAt", "*time.Time"},
+			{processName + "Deadline", "*time.Time"},
+			{processName + "FailureMessage", "string"},
+			{processName + "CompletedAt", "*time.Time"},
+		}) {
+			continue
+		}
+
+		if !fields.GetByName(processName + "Status").HasEnumValues([]string{
+			"in-progress",
+			"completed",
+			"failed",
+		}) {
+			continue
+		}
+
+		processes = append(processes, processName)
+	}
+
 	return &Model{
 		Singular:           typeName,
 		Plural:             inflect.Camelize(strings.Join(words, "_")),
@@ -1180,8 +1289,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		LowerSnakePlural:   lowerSnakePlural,
 		SQLTableName:       sqlTableName,
 		Fields:             fields,
-		IDField:            fields.GetByGoName("ID"),
-		VersionField:       fields.GetByGoName("Version"),
+		IDField:            fields.GetByName("ID"),
+		VersionField:       fields.GetByName("Version"),
+		Processes:          processes,
 		SpecialOrders:      specialOrders,
 		SpecialFilters:     specialFilters,
 		HasID:              hasID,
