@@ -106,22 +106,29 @@ var Columns = []*sqlbuilder.BasicColumn{
 {{- end}}
 }
 
+var (
+{{- range $Field := $Type.Fields}}
+	// Field{{$Field.GoName}} is a symbolic identifier for the "{{$Type.Singular}}"."{{$Field.GoName}}" field schema
+	Field{{$Field.GoName}} = &apitypes.Field{
+		GoName: "{{$Field.GoName}}",
+		GoType: "{{$Field.GoType}}",
+		SQLName: "{{$Field.SQLName}}",
+		SQLType: "{{$Field.SQLType}}",
+		APIName: "{{$Field.APIName}}",
+		APIType: "{{$Field.JSType}}",
+		Array: {{if $Field.Array}}true{{else}}false{{end}},
+		NotNull: {{if $Field.IsNull}}false{{else}}true{{end}},
+	}
+{{- end}}
+)
+
 var Model = &apitypes.Model{
 	GoName: "{{$Type.Singular}}",
 	SQLName: "{{$Type.SQLTableName}}",
 	APIName: "{{$Type.LowerPlural}}",
 	Fields: []*apitypes.Field{
 {{- range $Field := $Type.Fields}}
-		&apitypes.Field{
-			GoName: "{{$Field.GoName}}",
-			GoType: "{{$Field.GoType}}",
-			SQLName: "{{$Field.SQLName}}",
-			SQLType: "{{$Field.SQLType}}",
-			APIName: "{{$Field.APIName}}",
-			APIType: "{{$Field.JSType}}",
-			Array: {{if $Field.Array}}true{{else}}false{{end}},
-			NotNull: {{if $Field.IsNull}}false{{else}}true{{end}},
-		},
+		Field{{$Field.GoName}},
 {{- end}}
 	},
 }
