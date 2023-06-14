@@ -721,17 +721,6 @@ type Filter struct {
 }
 
 func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*Model, error) {
-	// r, err := regexp.Compile("[A-Z]+[a-z]+")
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// words := r.FindAllString(strings.ToUpper(typeName[0:1])+typeName[1:], -1)
-	// if len(words) == 0 {
-	// 	words = []string{strings.ToUpper(typeName[0:1]) + typeName[1:]}
-	// }
-	// words[len(words)-1] = inflect.Pluralize(words[len(words)-1])
-
 	words := splitWords(typeName)
 
 	words[len(words)-1] = inflect.Pluralize(words[len(words)-1])
