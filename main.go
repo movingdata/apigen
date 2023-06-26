@@ -94,7 +94,13 @@ func main() {
 
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		for _, err := range pkg.Errors {
+			// this happens when we remove a field
+			if strings.Contains(err.Error(), "_api.go:") && strings.Contains(err.Error(), "has no field or method") {
+				continue
+			}
+
 			l.WithError(err).Error("error found in package")
+
 			foundErrors = true
 		}
 	})
