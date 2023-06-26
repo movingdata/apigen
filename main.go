@@ -93,10 +93,17 @@ func main() {
 	var foundErrors = false
 
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+	loop:
 		for _, err := range pkg.Errors {
+			switch {
 			// this happens when we remove a field
-			if strings.Contains(err.Error(), "_api.go:") && strings.Contains(err.Error(), "has no field or method") {
-				continue
+			case strings.Contains(err.Error(), "_api.go:") && strings.Contains(err.Error(), "has no field or method"):
+				continue loop
+			// this happens when we remove a user filter
+			case strings.Contains(err.Error(), "_api.go:") && strings.Contains(err.Error(), "undefined:") && strings.Contains(err.Error(), "UserFilter"):
+				continue loop
+			default:
+				// nothing
 			}
 
 			l.WithError(err).Error("error found in package")
