@@ -17,20 +17,56 @@ import (
 	"github.com/grsmv/inflect"
 )
 
-type writer interface {
+type generator interface {
 	Name() string
+}
+
+type generatorForModel interface {
+	generator
+	Model(model *Model) []writer
+}
+
+type generatorForModels interface {
+	generator
+	Models(models []*Model) []writer
+}
+
+type writer interface {
 	Language() string
-	File(typeName string, namedType *types.Named, structType *types.Struct) string
-	Imports(typeName string, namedType *types.Named, structType *types.Struct) []string
-	Write(wr io.Writer, typeName string, namedType *types.Named, structType *types.Struct) error
+	File() string
+	Write(wr io.Writer) error
 }
 
-type packageNamer interface {
-	PackageName(typeName string, namedType *types.Named, structType *types.Struct) string
+type writerForGo interface {
+	PackageName() string
+	Imports() []string
 }
 
-type finisher interface {
-	Finish(dry bool) error
+type basicWriter struct {
+	language string
+	file     string
+	write    func(wr io.Writer) error
+}
+
+func (w *basicWriter) Language() string         { return w.language }
+func (w *basicWriter) File() string             { return w.file }
+func (w *basicWriter) Write(wr io.Writer) error { return w.write(wr) }
+
+type basicWriterForGo struct {
+	basicWriter
+	packageName string
+	imports     []string
+}
+
+func (w *basicWriterForGo) PackageName() string { return w.packageName }
+func (w *basicWriterForGo) Imports() []string   { return w.imports }
+
+func templateWriter(tpl string, vars map[string]interface{}) func(wr io.Writer) error {
+	t := template.Must(template.New("").Funcs(tplFunc).Parse(tpl))
+
+	return func(wr io.Writer) error {
+		return t.Execute(wr, vars)
+	}
 }
 
 var headerTemplate = template.Must(template.New("header").Parse(`package {{.PackageName}}
@@ -307,6 +343,18 @@ var jsTypes = map[string]string{
 	"time.Time":       "string",
 	"time.Duration":   "string",
 	"civil.Date":      "string",
+	"json.RawMessage": "any",
+}
+
+var flowTypes = map[string]string{
+	"string":          "string",
+	"int":             "number",
+	"float64":         "number",
+	"bool":            "boolean",
+	"uuid.UUID":       "global_uuid_UUID",
+	"time.Time":       "global_time_Time",
+	"time.Duration":   "global_time_Duration",
+	"civil.Date":      "global_civil_Date",
 	"json.RawMessage": "any",
 }
 
@@ -598,6 +646,7 @@ type Field struct {
 	APIName  string
 	APIRefs  []APIRef
 	JSType   string
+	FlowType string
 	JSONType map[string]interface{}
 
 	Filters []Filter
@@ -632,7 +681,7 @@ func (l FieldList) GetByName(name string) *Field {
 
 func (l FieldList) GetByNameAndType(name, typ string) *Field {
 	if f := l.GetByName(name); f != nil {
-		if f.GoType == typ || f.SQLType == typ || f.JSType == typ {
+		if f.GoType == typ || f.SQLType == typ || f.JSType == typ || f.FlowType == typ {
 			return f
 		}
 	}
@@ -715,6 +764,7 @@ type Filter struct {
 	GoName       string
 	GoType       string
 	JSType       string
+	FlowType     string
 	JSONType     string
 	TestOperator string
 	TestType     string
@@ -929,17 +979,19 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			SequencePrefix: sequencePrefix,
 		}
 
-		var goType, jsType, jsonType, sqlType string
+		var goType, jsType, flowType, jsonType, sqlType string
 
 		switch ft := ft.(type) {
 		case *types.Basic:
 			goType = ft.String()
 			jsType = jsTypes[goType]
+			flowType = flowTypes[goType]
 			jsonType = jsTypes[goType]
 			sqlType = sqlTypes[goType]
 		case *types.Named:
 			goType = ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
 			jsType = jsTypes[goType]
+			flowType = flowTypes[goType]
 			jsonType = jsTypes[goType]
 			sqlType = sqlTypes[goType]
 		default:
@@ -952,27 +1004,35 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 		if jsType == "" {
 			return nil, fmt.Errorf("couldn't determine js type for %s (%s)", ft, f.Name())
 		}
+		if flowType == "" {
+			return nil, fmt.Errorf("couldn't determine js type for %s (%s)", ft, f.Name())
+		}
 		if sqlType == "" {
 			return nil, fmt.Errorf("couldn't determine sql type for %s (%s)", ft, f.Name())
 		}
 
 		var jsEnums []string
+		var flowEnums []string
 		var jsonEnums []string
 
 		if len(enums) > 0 {
 			switch jsType {
 			case "string":
 				jsEnums = make([]string, len(enums))
+				flowEnums = make([]string, len(enums))
 				jsonEnums = make([]string, len(enums))
 				for i := range enums {
 					jsEnums[i] = "'" + enums[i].Value + "'"
+					flowEnums[i] = "'" + enums[i].Value + "'"
 					jsonEnums[i] = enums[i].Value
 				}
 			case "number":
 				jsEnums = make([]string, len(enums))
+				flowEnums = make([]string, len(enums))
 				jsonEnums = make([]string, len(enums))
 				for i := range enums {
 					jsEnums[i] = enums[i].Value
+					flowEnums[i] = enums[i].Value
 					jsonEnums[i] = enums[i].Value
 				}
 			default:
@@ -982,10 +1042,12 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 		if len(jsEnums) > 0 {
 			jsType = typeName + gf.GoName
+			flowType = "global_db_" + typeName + gf.GoName
 		}
 
 		gf.GoType = goType
 		gf.JSType = jsType
+		gf.FlowType = flowType
 		gf.JSONType = map[string]interface{}{"type": jsonType}
 		gf.SQLType = sqlType
 
@@ -997,11 +1059,13 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			gf.IsNull = true
 			gf.GoType = "*" + gf.GoType
 			gf.JSType = "?" + gf.JSType
+			gf.FlowType = "?" + gf.FlowType
 		}
 		if isSlice {
 			gf.Array = true
 			gf.GoType = "[]" + gf.GoType
 			gf.JSType = "$ReadOnlyArray<" + gf.JSType + ">"
+			gf.FlowType = "$ReadOnlyArray<" + gf.FlowType + ">"
 			gf.JSONType = map[string]interface{}{
 				"type":  "array",
 				"items": gf.JSONType,
@@ -1048,6 +1112,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				Name:         name,
 				GoName:       goName,
 				JSType:       jsType,
+				FlowType:     flowType,
 				JSONType:     jsonType,
 				TestOperator: "typeof",
 				TestType:     jsType,
@@ -1113,6 +1178,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			goName := f.Name()
 			filterJSONType := jsonType
 			filterJSType := jsType
+			filterFlowType := flowType
 			switch operator {
 			case "!=":
 				jsName = jsName + "Ne"
@@ -1146,11 +1212,13 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				goName = goName + "IsNull"
 				filterJSONType = "boolean"
 				filterJSType = "boolean"
+				filterFlowType = "boolean"
 			case "is_not_null":
 				jsName = jsName + "IsNotNull"
 				goName = goName + "IsNotNull"
 				filterJSONType = "boolean"
 				filterJSType = "boolean"
+				filterFlowType = "boolean"
 			case "@@":
 				jsName = jsName + "Match"
 				goName = goName + "Match"
@@ -1189,6 +1257,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				Name:         jsName,
 				GoName:       goName,
 				JSType:       filterJSType,
+				FlowType:     filterFlowType,
 				JSONType:     filterJSONType,
 				TestOperator: "typeof",
 				TestType:     filterJSType,
@@ -1207,9 +1276,11 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			case "is_null", "is_not_null":
 				gff.GoType = "*bool"
 				gff.JSType = "boolean"
+				gff.FlowType = "boolean"
 			case "in", "not_in", "@>", "!@>", "<@", "!<@", "&&", "!&&":
 				gff.GoType = "[]" + strings.TrimPrefix(gff.GoType, "*")
 				gff.JSType = "$ReadOnlyArray<" + strings.TrimPrefix(gff.JSType, "?") + ">"
+				gff.FlowType = "$ReadOnlyArray<" + strings.TrimPrefix(gff.FlowType, "?") + ">"
 				gff.TestOperator = "is_array"
 			}
 

@@ -9,54 +9,70 @@ import (
 	"go/token"
 	"go/types"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/imports"
 )
 
 var (
-	packageName       string
-	goDir             string
-	jsDir             string
-	swaggerFile       string
-	dry               bool
-	damp              bool
-	filter            string
-	writers           string
-	verbose           bool
-	disableFormatting bool
+	flagLogLevel          string
+	flagGoDir             string
+	flagJSDir             string
+	flagFlowDir           string
+	flagSwaggerFile       string
+	flagFilter            string
+	flagGenerators        string
+	flagDry               bool
+	flagDisableFormatting bool
 )
 
 func init() {
-	flag.StringVar(&packageName, "package_name", "", "Name of the package for the model code (default is the same as the source package).")
-	flag.StringVar(&goDir, "go_dir", "", "Directory to output model code to (default is the same directory as the source files).")
-	flag.StringVar(&jsDir, "js_dir", "", "Directory to output JavaScript code to (default is ../client/src/ducks relative to the source files).")
-	flag.StringVar(&swaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
-	flag.BoolVar(&dry, "dry", false, "Dry run (don't write files).")
-	flag.BoolVar(&damp, "damp", false, "Damp run (don't write main files).")
-	flag.StringVar(&filter, "filter", "", "Filter to only the types in this comma-separated list.")
-	flag.StringVar(&writers, "writers", "api,apifilter,enum,schema,sql,js,swagger", "Run only the specified writers.")
-	flag.BoolVar(&verbose, "verbose", false, "Show timing and debug information.")
-	flag.BoolVar(&disableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
+	flag.StringVar(&flagLogLevel, "log_level", "info", "Log level (options are panic, fatal, error, warn, info, debug, trace).")
+	flag.StringVar(&flagGoDir, "go_dir", "", "Directory to output model code to (default is the same directory as the source files).")
+	flag.StringVar(&flagJSDir, "js_dir", "", "Directory to output JavaScript code to (default is ../client/src relative to the source files).")
+	flag.StringVar(&flagFlowDir, "flow_dir", "", "Directory to output Flow code to (default is ../static/flow/lib relative to the source files).")
+	flag.StringVar(&flagSwaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
+	flag.StringVar(&flagFilter, "filter", "", "Filter to only the types in this comma-separated list.")
+	flag.StringVar(&flagGenerators, "generators", "api,apifilter,enum,flow,js,schema,sql,swagger", "Run only the specified generators.")
+	flag.BoolVar(&flagDry, "dry", false, "Dry run (don't write files).")
+	flag.BoolVar(&flagDisableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
 }
 
-func logTime(s string, fn func()) {
+func logTime(l *logrus.Entry, s string, fn func()) {
+	l = l.WithField("operation", s)
+
 	a := time.Now()
+
+	l = l.WithField("time_start", a)
+
+	l.Debug("starting")
+
 	fn()
+
 	b := time.Now()
-	if verbose {
-		fmt.Printf("%s took %s\n", s, b.Sub(a))
-	}
+
+	l.WithFields(logrus.Fields{
+		"time_end":   b,
+		"time_total": b.Sub(a),
+	}).Debug("finished")
 }
 
 func main() {
 	flag.Parse()
+
+	ll, err := logrus.ParseLevel(flagLogLevel)
+	if err != nil {
+		panic(err)
+	}
+	logrus.SetLevel(ll)
+
+	l := logrus.NewEntry(logrus.StandardLogger())
 
 	i := 0
 
@@ -71,24 +87,34 @@ func main() {
 
 	pkgs, err := packages.Load(&cfg, flag.Args()...)
 	if err != nil {
-		panic(err)
+		l.WithError(err).Fatal("couldn't load packages")
 	}
 
-	fmt.Printf("\n")
+	var foundErrors = false
 
-	if verbose {
-		packages.PrintErrors(pkgs)
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		for _, err := range pkg.Errors {
+			l.WithError(err).Error("error found in package")
+			foundErrors = true
+		}
+	})
+
+	if foundErrors {
+		l.Fatal("errors found in package(s)")
 	}
 
-	writerMap := make(map[string]bool)
-	for _, s := range strings.Split(writers, ",") {
+	generatorMap := make(map[string]bool)
+	for _, s := range strings.Split(flagGenerators, ",") {
 		if s == "" {
 			continue
 		}
-		writerMap[s] = true
+		generatorMap[s] = true
 	}
 
 	for _, pkg := range pkgs {
+		l := l.WithField("package", pkg.Types.Name())
+
+		goDir := flagGoDir
 		if goDir == "" {
 			goDir = pkg.PkgPath
 		}
@@ -96,59 +122,68 @@ func main() {
 			goDir = filepath.Dir(pkg.GoFiles[0])
 		}
 		if goDir == "" {
-			fmt.Printf("%#v\n", pkg)
-			log.Print("couldn't determine package directory")
-			os.Exit(1)
+			l.Fatal("could not determine go directory")
 		}
 
+		jsDir := flagJSDir
 		if jsDir == "" {
-			jsDir = filepath.Join(goDir, "../client/src/ducks")
+			jsDir = filepath.Join(goDir, "../client/src")
 		}
+
+		flowDir := flagFlowDir
+		if flowDir == "" {
+			flowDir = filepath.Join(goDir, "../static/flow/lib")
+		}
+
+		swaggerFile := flagSwaggerFile
 		if swaggerFile == "" {
 			swaggerFile = filepath.Join(goDir, "../static/swagger.json")
 		}
 
-		var writerList []writer
+		var generatorList []generator
 
-		if len(writerMap) == 0 || writerMap["api"] {
-			writerList = append(writerList, NewAPIWriter(goDir))
+		if len(generatorMap) == 0 || generatorMap["api"] {
+			generatorList = append(generatorList, NewAPIGenerator(goDir))
 		}
-		if len(writerMap) == 0 || writerMap["apifilter"] {
-			writerList = append(writerList, NewAPIFilterWriter(goDir))
+		if len(generatorMap) == 0 || generatorMap["apifilter"] {
+			generatorList = append(generatorList, NewAPIFilterGenerator(goDir))
 		}
-		if len(writerMap) == 0 || writerMap["enum"] {
-			writerList = append(writerList, NewEnumWriter(goDir))
+		if len(generatorMap) == 0 || generatorMap["enum"] {
+			generatorList = append(generatorList, NewEnumGenerator(goDir))
 		}
-		if len(writerMap) == 0 || writerMap["schema"] {
-			writerList = append(writerList, NewSchemaWriter(goDir))
+		if len(generatorMap) == 0 || generatorMap["js"] {
+			generatorList = append(generatorList, NewJSGenerator(jsDir))
 		}
-		if len(writerMap) == 0 || writerMap["sql"] {
-			writerList = append(writerList, NewSQLWriter(goDir))
+		if len(generatorMap) == 0 || generatorMap["flow"] {
+			generatorList = append(generatorList, NewFlowGenerator(flowDir))
 		}
-		if len(writerMap) == 0 || writerMap["js"] {
-			writerList = append(writerList, NewJSWriter(jsDir))
+		if len(generatorMap) == 0 || generatorMap["schema"] {
+			generatorList = append(generatorList, NewSchemaGenerator(goDir))
 		}
-		if len(writerMap) == 0 || writerMap["swagger"] {
-			writerList = append(writerList, NewSwaggerWriter(swaggerFile))
+		if len(generatorMap) == 0 || generatorMap["sql"] {
+			generatorList = append(generatorList, NewSQLGenerator(goDir))
+		}
+		if len(generatorMap) == 0 || generatorMap["swagger"] {
+			generatorList = append(generatorList, NewSwaggerGenerator(swaggerFile))
 		}
 
+		packageName := pkg.Types.Name()
 		if packageName == "" {
-			packageName = pkg.Types.Name()
-		}
-		if packageName == "" {
-			fmt.Printf("%#v\n", pkg)
-			log.Print("couldn't determine package name")
-			os.Exit(1)
+			l.Fatal("couldn't determine package name")
 		}
 
 		var filters []*regexp.Regexp
-		if filter != "" {
-			for _, e := range strings.Split(filter, ",") {
+		if flagFilter != "" {
+			for _, e := range strings.Split(flagFilter, ",") {
 				filters = append(filters, regexp.MustCompile("^"+e+"$"))
 			}
 		}
 
+		var models []*Model
+
 		for _, typeName := range pkg.Types.Scope().Names() {
+			l := l.WithField("model", typeName)
+
 			if len(filters) > 0 {
 				match := false
 
@@ -210,71 +245,111 @@ func main() {
 				continue
 			}
 
-			for _, w := range writerList {
-				filename := w.File(typeName, namedType, structType)
+			model, err := makeModel(typeName, namedType, structType)
+			if err != nil {
+				l.WithError(err).Fatal("could not make model object")
+			}
 
-				if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-					log.Fatalf("error preparing directory for %s (%s): %s", typeName, w.Name(), err.Error())
+			models = append(models, model)
+
+			for _, g := range generatorList {
+				g, ok := g.(generatorForModel)
+				if !ok {
+					continue
 				}
 
-				log.Printf("working on %s (%s)", typeName, filename)
-
-				buf := bytes.NewBuffer(nil)
-
-				if w.Language() == "go" {
-					thisPackageName := packageName
-					if n, ok := w.(packageNamer); ok {
-						thisPackageName = n.PackageName(typeName, namedType, structType)
-					}
-
-					logTime("executing go header template", func() {
-						if err := headerTemplate.Execute(buf, struct {
-							PackageName string
-							Imports     []string
-						}{thisPackageName, w.Imports(typeName, namedType, structType)}); err != nil {
-							log.Fatalf("error writing header for %s (%s): %s", typeName, w.Name(), err.Error())
-						}
-					})
-				}
-
-				logTime("executing logic", func() {
-					if err := w.Write(buf, typeName, namedType, structType); err != nil {
-						log.Fatalf("error generating code for %s (%s): %s", typeName, w.Name(), err.Error())
-					}
+				l := l.WithFields(logrus.Fields{
+					"mode":      "model",
+					"generator": g.Name(),
 				})
 
-				nice := buf.Bytes()
-
-				if w.Language() == "go" && !disableFormatting && !damp {
-					logTime("formatting go code", func() {
-						d, err := imports.Process(filename, nice, nil)
-						if err != nil {
-							log.Fatalf("error formatting code for %s (%s): %s", typeName, w.Name(), err.Error())
-						}
-						nice = d
-					})
-				}
-
-				if !dry && !damp {
-					logTime("writing file", func() {
-						if err := ioutil.WriteFile(filename, nice, 0644); err != nil {
-							log.Fatalf("error writing code for %s (%s): %s", typeName, w.Name(), err.Error())
-						}
-					})
+				if err := executeWriters(l, g.Model(model)); err != nil {
+					l.WithError(err).Fatal("could not execute writer(s)")
 				}
 			}
 		}
 
-		for _, w := range writerList {
-			if f, ok := w.(finisher); ok {
-				log.Printf("running finisher %s\n", w.Name())
+		for _, g := range generatorList {
+			g, ok := g.(generatorForModels)
+			if !ok {
+				continue
+			}
 
-				logTime("finishing writer", func() {
-					if err := f.Finish(dry); err != nil {
-						panic(err)
-					}
-				})
+			l := l.WithFields(logrus.Fields{
+				"mode":      "models",
+				"generator": g.Name(),
+			})
+
+			if err := executeWriters(l, g.Models(models)); err != nil {
+				l.WithError(err).Fatal("could not execute writer(s)")
 			}
 		}
 	}
+}
+
+func executeWriters(l *logrus.Entry, a []writer) error {
+	for i, w := range a {
+		l := l.WithField("writer", i)
+
+		if err := executeWriter(l, w); err != nil {
+			l.WithError(err).Fatal("could not execute writer")
+		}
+	}
+
+	return nil
+}
+
+func executeWriter(l *logrus.Entry, w writer) error {
+	filename := w.File()
+
+	l = l.WithField("output", filename)
+
+	l.Info("executing writer")
+
+	if !flagDry {
+		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+			l.WithError(err).Fatal("could not prepare target directory")
+		}
+	}
+
+	buf := bytes.NewBuffer(nil)
+
+	if w, ok := w.(writerForGo); ok {
+		logTime(l, "execute go header template", func() {
+			if err := headerTemplate.Execute(buf, struct {
+				PackageName string
+				Imports     []string
+			}{w.PackageName(), w.Imports()}); err != nil {
+				l.WithError(err).Fatal("could not write go header")
+			}
+		})
+	}
+
+	logTime(l, "generate code", func() {
+		if err := w.Write(buf); err != nil {
+			l.WithError(err).Fatal("could not generate code")
+		}
+	})
+
+	nice := buf.Bytes()
+
+	if w.Language() == "go" && !flagDisableFormatting {
+		logTime(l, "format go code", func() {
+			d, err := imports.Process(filename, nice, nil)
+			if err != nil {
+				l.WithError(err).Fatal("could not format go code")
+			}
+			nice = d
+		})
+	}
+
+	if !flagDry {
+		logTime(l, "write file", func() {
+			if err := ioutil.WriteFile(filename, nice, 0644); err != nil {
+				l.WithError(err).Fatal("could not write output")
+			}
+		})
+	}
+
+	return nil
 }
