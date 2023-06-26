@@ -99,10 +99,6 @@ type global_db_{{$Model.Singular}}_SearchResponse = {|
 var flowFinishTemplate = `
 {{$Models := .Models}}
 
-{{- range $Model := $Models}}
-// @import global_db_model_{{$Model.Singular | LC}}.js
-{{- end}}
-
 type global_db_CallbackSpecifier = {|
   model?: string,
   name?: string,
@@ -145,4 +141,6 @@ declare class global_db_DB {
 };
 
 declare var db: global_db_DB;
+
+declare function dbAs(userId: global_uuid_UUID, effectiveUserId: global_uuid_UUID): global_db_DB;
 `
