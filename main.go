@@ -20,14 +20,103 @@ import (
 	"golang.org/x/tools/imports"
 )
 
+func match(pattern, value string) bool {
+	pattern = strings.ReplaceAll(pattern, ".", "\\.")
+	pattern = strings.ReplaceAll(pattern, "*", ".*")
+	pattern = strings.ReplaceAll(pattern, "?", ".")
+	match, _ := regexp.MatchString("^"+pattern+"$", value)
+	return match
+}
+
+func matchAny(patterns []string, value string) bool {
+	if len(patterns) == 0 {
+		return true
+	}
+
+	for _, e := range patterns {
+		if match(e, value) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type filter struct {
+	modelFilters  []string
+	writerFilters []string
+}
+
+func (f *filter) match(modelName, writerName string) bool {
+	return matchAny(f.modelFilters, modelName) && matchAny(f.writerFilters, writerName)
+}
+
+func (f *filter) String() string {
+	if len(f.writerFilters) == 0 {
+		return strings.Join(f.modelFilters, ",")
+	}
+
+	return strings.Join(f.modelFilters, ",") + ":" + strings.Join(f.writerFilters, ",")
+}
+
+func (f *filter) UnmarshalText(d []byte) error {
+	sets := strings.Split(string(d), ":")
+	if len(sets) > 2 {
+		return fmt.Errorf("too many sets of filters")
+	}
+
+	if len(sets) > 0 && sets[0] != "" {
+		f.modelFilters = strings.Split(sets[0], ",")
+	}
+	if len(sets) > 1 && sets[1] != "" {
+		f.writerFilters = strings.Split(sets[1], ",")
+	}
+
+	return nil
+}
+
+func (f *filter) MarshalText() ([]byte, error) {
+	return []byte(f.String()), nil
+}
+
+type filterList []filter
+
+func (l filterList) match(modelName, writerName string) bool {
+	if len(l) == 0 {
+		return true
+	}
+
+	for _, e := range l {
+		if e.match(modelName, writerName) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (l *filterList) String() string {
+	return fmt.Sprint(*l)
+}
+
+func (l *filterList) Set(s string) error {
+	var f filter
+	if err := f.UnmarshalText([]byte(s)); err != nil {
+		return err
+	}
+
+	*l = append(*l, f)
+
+	return nil
+}
+
 var (
 	flagLogLevel          string
 	flagGoDir             string
 	flagJSDir             string
 	flagFlowDir           string
 	flagSwaggerFile       string
-	flagFilter            string
-	flagGenerators        string
+	flagFilters           filterList
 	flagDry               bool
 	flagDisableFormatting bool
 )
@@ -38,8 +127,7 @@ func init() {
 	flag.StringVar(&flagJSDir, "js_dir", "", "Directory to output JavaScript code to (default is ../client/src relative to the source files).")
 	flag.StringVar(&flagFlowDir, "flow_dir", "", "Directory to output Flow code to (default is ../static/flow/lib relative to the source files).")
 	flag.StringVar(&flagSwaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
-	flag.StringVar(&flagFilter, "filter", "", "Filter to only the types in this comma-separated list.")
-	flag.StringVar(&flagGenerators, "generators", "api,apifilter,enum,flow,js,schema,sql,swagger", "Run only the specified generators.")
+	flag.Var(&flagFilters, "filter", "Filter to only the specified models and writers.")
 	flag.BoolVar(&flagDry, "dry", false, "Dry run (don't write files).")
 	flag.BoolVar(&flagDisableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
 }
@@ -90,6 +178,8 @@ func main() {
 		l.WithError(err).Fatal("couldn't load packages")
 	}
 
+	fmt.Printf("\n")
+
 	var foundErrors = false
 
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
@@ -114,14 +204,6 @@ func main() {
 
 	if foundErrors {
 		l.Fatal("errors found in package(s)")
-	}
-
-	generatorMap := make(map[string]bool)
-	for _, s := range strings.Split(flagGenerators, ",") {
-		if s == "" {
-			continue
-		}
-		generatorMap[s] = true
 	}
 
 	for _, pkg := range pkgs {
@@ -153,31 +235,15 @@ func main() {
 			swaggerFile = filepath.Join(goDir, "../static/swagger.json")
 		}
 
-		var generatorList []generator
-
-		if len(generatorMap) == 0 || generatorMap["api"] {
-			generatorList = append(generatorList, NewAPIGenerator(goDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["apifilter"] {
-			generatorList = append(generatorList, NewAPIFilterGenerator(goDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["enum"] {
-			generatorList = append(generatorList, NewEnumGenerator(goDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["js"] {
-			generatorList = append(generatorList, NewJSGenerator(jsDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["flow"] {
-			generatorList = append(generatorList, NewFlowGenerator(flowDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["schema"] {
-			generatorList = append(generatorList, NewSchemaGenerator(goDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["sql"] {
-			generatorList = append(generatorList, NewSQLGenerator(goDir))
-		}
-		if len(generatorMap) == 0 || generatorMap["swagger"] {
-			generatorList = append(generatorList, NewSwaggerGenerator(swaggerFile))
+		generatorList := []generator{
+			NewAPIGenerator(goDir),
+			NewAPIFilterGenerator(goDir),
+			NewEnumGenerator(goDir),
+			NewJSGenerator(jsDir),
+			NewFlowGenerator(flowDir),
+			NewSchemaGenerator(goDir),
+			NewSQLGenerator(goDir),
+			NewSwaggerGenerator(swaggerFile),
 		}
 
 		packageName := pkg.Types.Name()
@@ -185,32 +251,10 @@ func main() {
 			l.Fatal("couldn't determine package name")
 		}
 
-		var filters []*regexp.Regexp
-		if flagFilter != "" {
-			for _, e := range strings.Split(flagFilter, ",") {
-				filters = append(filters, regexp.MustCompile("^"+e+"$"))
-			}
-		}
-
 		var models []*Model
 
 		for _, typeName := range pkg.Types.Scope().Names() {
 			l := l.WithField("model", typeName)
-
-			if len(filters) > 0 {
-				match := false
-
-				for _, f := range filters {
-					if f.MatchString(typeName) {
-						match = true
-						break
-					}
-				}
-
-				if !match {
-					continue
-				}
-			}
 
 			obj := pkg.Types.Scope().Lookup(typeName)
 
@@ -272,12 +316,21 @@ func main() {
 				}
 
 				l := l.WithFields(logrus.Fields{
-					"mode":      "model",
+					"mode":      "singular",
 					"generator": g.Name(),
 				})
 
-				if err := executeWriters(l, g.Model(model)); err != nil {
-					l.WithError(err).Fatal("could not execute writer(s)")
+				for _, w := range g.Model(model) {
+					l := l.WithField("writer", w.Name())
+
+					if !flagFilters.match(model.Singular, g.Name()+"/"+w.Name()) {
+						l.Debug("skipping writer due to not matching filter(s)")
+						continue
+					}
+
+					if err := executeWriter(l, w); err != nil {
+						l.WithError(err).Fatal("could not execute writer")
+					}
 				}
 			}
 		}
@@ -289,27 +342,24 @@ func main() {
 			}
 
 			l := l.WithFields(logrus.Fields{
-				"mode":      "models",
+				"mode":      "aggregated",
 				"generator": g.Name(),
 			})
 
-			if err := executeWriters(l, g.Models(models)); err != nil {
-				l.WithError(err).Fatal("could not execute writer(s)")
+			for _, w := range g.Models(models) {
+				l := l.WithField("writer", w.Name())
+
+				if !flagFilters.match("_", g.Name()+"/"+w.Name()) {
+					l.Debug("skipping writer due to not matching filter(s)")
+					continue
+				}
+
+				if err := executeWriter(l, w); err != nil {
+					l.WithError(err).Fatal("could not execute writer")
+				}
 			}
 		}
 	}
-}
-
-func executeWriters(l *logrus.Entry, a []writer) error {
-	for i, w := range a {
-		l := l.WithField("writer", i)
-
-		if err := executeWriter(l, w); err != nil {
-			l.WithError(err).Fatal("could not execute writer")
-		}
-	}
-
-	return nil
 }
 
 func executeWriter(l *logrus.Entry, w writer) error {

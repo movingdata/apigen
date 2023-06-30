@@ -20,6 +20,7 @@ func (g *SchemaGenerator) Model(model *Model) []writer {
 	return []writer{
 		&basicWriterForGo{
 			basicWriter: basicWriter{
+				name:     "individual",
 				language: "go",
 				file:     g.dir + "/modelschema/" + strings.ToLower(model.Singular) + "schema/" + strings.ToLower(model.Singular) + "schema.go",
 				write:    templateWriter(schemaTemplate, map[string]interface{}{"Model": model}),
@@ -37,6 +38,7 @@ func (g *SchemaGenerator) Models(models []*Model) []writer {
 	return []writer{
 		&basicWriterForGo{
 			basicWriter: basicWriter{
+				name:     "aggregated",
 				language: "go",
 				file:     g.dir + "/modelschema/models.go",
 				write:    templateWriter(schemaFinishTemplate, map[string]interface{}{"Models": models}),

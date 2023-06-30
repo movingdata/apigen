@@ -21,6 +21,7 @@ func (SwaggerGenerator) Name() string {
 func (g *SwaggerGenerator) Models(models []*Model) []writer {
 	return []writer{
 		&basicWriter{
+			name:     "aggregated",
 			language: "swagger",
 			file:     g.file,
 			write: func(wr io.Writer) error {

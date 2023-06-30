@@ -20,6 +20,7 @@ func (g *EnumGenerator) Model(model *Model) []writer {
 	return []writer{
 		&basicWriterForGo{
 			basicWriter: basicWriter{
+				name:     "individual",
 				language: "go",
 				file:     g.dir + "/modelenum/" + strings.ToLower(model.Singular) + "enum/" + strings.ToLower(model.Singular) + "enum.go",
 				write:    templateWriter(enumTemplate, map[string]interface{}{"Model": model}),

@@ -32,6 +32,7 @@ type generatorForModels interface {
 }
 
 type writer interface {
+	Name() string
 	Language() string
 	File() string
 	Write(wr io.Writer) error
@@ -43,11 +44,13 @@ type writerForGo interface {
 }
 
 type basicWriter struct {
+	name     string
 	language string
 	file     string
 	write    func(wr io.Writer) error
 }
 
+func (w *basicWriter) Name() string             { return w.name }
 func (w *basicWriter) Language() string         { return w.language }
 func (w *basicWriter) File() string             { return w.file }
 func (w *basicWriter) Write(wr io.Writer) error { return w.write(wr) }

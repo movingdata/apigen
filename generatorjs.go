@@ -15,6 +15,7 @@ func (g *JSGenerator) Name() string {
 func (g *JSGenerator) Model(model *Model) []writer {
   return []writer{
     &basicWriter{
+      name:     "individual",
       language: "js",
       file:     g.dir + "/ducks/" + model.LowerPlural + ".js",
       write:    templateWriter(jsTemplate, map[string]interface{}{"Model": model}),

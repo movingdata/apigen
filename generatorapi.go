@@ -20,6 +20,7 @@ func (g *APIGenerator) Model(model *Model) []writer {
   return []writer{
     &basicWriterForGo{
       basicWriter: basicWriter{
+        name:     "individual",
         language: "go",
         file:     g.dir + "/" + strings.ToLower(model.Singular) + "_api.go",
         write:    templateWriter(apiTemplate, map[string]interface{}{"Model": model}),

@@ -20,6 +20,7 @@ func (g *SQLGenerator) Model(model *Model) []writer {
 	return []writer{
 		&basicWriterForGo{
 			basicWriter: basicWriter{
+				name:     "individual",
 				language: "go",
 				file:     g.dir + "/" + strings.ToLower(model.Singular) + "_sql.go",
 				write:    templateWriter(sqlTemplate, map[string]interface{}{"Model": model}),

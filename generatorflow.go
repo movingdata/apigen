@@ -21,6 +21,7 @@ func (g *FlowGenerator) Name() string {
 func (g *FlowGenerator) Model(model *Model) []writer {
   return []writer{
     &basicWriter{
+      name:     "individual",
       language: "flow",
       file:     g.dir + "/global_db_model_" + strings.ToLower(model.Singular) + ".js",
       write:    templateWriter(flowTemplate, map[string]interface{}{"Model": model}),
@@ -31,11 +32,13 @@ func (g *FlowGenerator) Model(model *Model) []writer {
 func (g *FlowGenerator) Models(models []*Model) []writer {
   return []writer{
     &basicWriter{
+      name:     "aggregated/flow",
       language: "flow",
       file:     g.dir + "/global_db.js",
       write:    templateWriter(flowFinishTemplate, map[string]interface{}{"Models": models}),
     },
     &basicWriter{
+      name:     "aggregated/manifest",
       language: "flow",
       file:     g.dir + "/global_db_manifest.json",
       write: func(wr io.Writer) error {

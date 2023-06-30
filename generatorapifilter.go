@@ -20,6 +20,7 @@ func (g *APIFilterGenerator) Model(model *Model) []writer {
   return []writer{
     &basicWriterForGo{
       basicWriter: basicWriter{
+        name:     "individual",
         language: "go",
         file:     g.dir + "/modelapifilter/" + strings.ToLower(model.Singular) + "apifilter/" + strings.ToLower(model.Singular) + "apifilter.go",
         write:    templateWriter(apifilterTemplate, map[string]interface{}{"Model": model}),
@@ -54,6 +55,7 @@ func (g *APIFilterGenerator) Models(models []*Model) []writer {
   return []writer{
     &basicWriterForGo{
       basicWriter: basicWriter{
+        name:     "aggregated",
         language: "go",
         file:     g.dir + "/modelapifilter/modelapifilter.go",
         write:    templateWriter(apifilterFinishTemplate, map[string]interface{}{"Models": models}),
