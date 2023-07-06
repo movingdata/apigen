@@ -119,6 +119,7 @@ var (
 	flagFilters           filterList
 	flagDry               bool
 	flagDisableFormatting bool
+	flagAllowSourceErrors bool
 )
 
 func init() {
@@ -130,6 +131,7 @@ func init() {
 	flag.Var(&flagFilters, "filter", "Filter to only the specified models and writers.")
 	flag.BoolVar(&flagDry, "dry", false, "Dry run (don't write files).")
 	flag.BoolVar(&flagDisableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
+	flag.BoolVar(&flagAllowSourceErrors, "allow_source_errors", false, "Don't exit when errors are found in source packages.")
 }
 
 func logTime(l *logrus.Entry, s string, fn func()) {
@@ -202,7 +204,7 @@ func main() {
 		}
 	})
 
-	if foundErrors {
+	if foundErrors && !flagAllowSourceErrors {
 		l.Fatal("errors found in package(s)")
 	}
 
