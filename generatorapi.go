@@ -1498,22 +1498,13 @@ func {{$Model.Singular}}APIFindAndModifyOutsideTransaction(
   options *modelutil.APIOptions,
   modify func(v *{{$Model.Singular}}) error,
 ) (*{{$Model.Singular}}, error) {
-  var out *{{$Model.Singular}}
-
-  if err := retrydb.LinearBackoff(db, 5, time.Millisecond*500, func(tx *sql.Tx) error {
+  return retrydb.LinearBackoff2(ctx, db, &sql.TxOptions{Isolation: sql.LevelSerializable}, 5, time.Millisecond*500, func(ctx context.Context, tx *sql.Tx) (*{{$Model.Singular}}, error) {
     v, err := {{$Model.Singular}}APIFindAndModify(ctx, mctx, tx, uid, euid, now, id, options, modify)
     if err != nil {
-      return err
+      return v, fmt.Errorf("{{$Model.Singular}}APIFindAndModifyOutsideTransaction: %w", err)
     }
-
-    out = v
-
-    return nil
-  }); err != nil {
-    return nil, fmt.Errorf("{{$Model.Singular}}APIFindAndModifyOutsideTransaction: %w", err)
-  }
-
-  return out, nil
+    return v, nil
+  })
 }
 
 func (v *{{$Model.Singular}}) APIFindAndModifyOutsideTransaction(
