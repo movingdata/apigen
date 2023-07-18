@@ -349,6 +349,65 @@ var jsTypes = map[string]string{
 	"json.RawMessage": "any",
 }
 
+type SwaggerType struct {
+	Type     string        `json:"type"`
+	Format   string        `json:"format,omitempty"`
+	Nullable bool          `json:"nullable,omitempty"`
+	Enum     []interface{} `json:"enum,omitempty"`
+	Items    *SwaggerType  `json:"items,omitempty"`
+}
+
+func (t *SwaggerType) toMap() map[string]interface{} {
+	if t.Type == "any" {
+		return map[string]interface{}{}
+	}
+
+	m := map[string]interface{}{"type": t.Type}
+
+	if t.Format != "" {
+		m["format"] = t.Format
+	}
+
+	if t.Nullable {
+		m["nullable"] = t.Nullable
+	}
+
+	if t.Enum != nil {
+		m["enum"] = t.Enum
+	}
+
+	if t.Items != nil {
+		m["items"] = t.Items.toMap()
+	}
+
+	return m
+}
+
+func getSwaggerType(goType string) *SwaggerType {
+	switch goType {
+	case "string":
+		return &SwaggerType{Type: "string"}
+	case "int":
+		return &SwaggerType{Type: "number"}
+	case "float64":
+		return &SwaggerType{Type: "number"}
+	case "bool":
+		return &SwaggerType{Type: "boolean"}
+	case "uuid.UUID":
+		return &SwaggerType{Type: "string", Format: "uuid"}
+	case "time.Time":
+		return &SwaggerType{Type: "string", Format: "date-time"}
+	case "time.Duration":
+		return &SwaggerType{Type: "string"}
+	case "civil.Date":
+		return &SwaggerType{Type: "string", Format: "date"}
+	case "json.RawMessage":
+		return &SwaggerType{Type: "any"}
+	default:
+		return nil
+	}
+}
+
 var flowTypes = map[string]string{
 	"string":          "string",
 	"int":             "number",
@@ -646,11 +705,11 @@ type Field struct {
 	SQLName string
 	SQLType string
 
-	APIName  string
-	APIRefs  []APIRef
-	JSType   string
-	FlowType string
-	JSONType map[string]interface{}
+	APIName     string
+	APIRefs     []APIRef
+	JSType      string
+	FlowType    string
+	SwaggerType *SwaggerType
 
 	Filters []Filter
 
@@ -762,15 +821,13 @@ type SpecialOrder struct {
 }
 
 type Filter struct {
-	Operator     string
-	Name         string
-	GoName       string
-	GoType       string
-	JSType       string
-	FlowType     string
-	JSONType     string
-	TestOperator string
-	TestType     string
+	Operator    string
+	Name        string
+	GoName      string
+	GoType      string
+	JSType      string
+	FlowType    string
+	SwaggerType *SwaggerType
 }
 
 func makeModel(typeName string, namedType *types.Named, structType *types.Struct) (*Model, error) {
@@ -982,24 +1039,21 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			SequencePrefix: sequencePrefix,
 		}
 
-		var goType, jsType, flowType, jsonType, sqlType string
+		var goType string
 
 		switch ft := ft.(type) {
 		case *types.Basic:
 			goType = ft.String()
-			jsType = jsTypes[goType]
-			flowType = flowTypes[goType]
-			jsonType = jsTypes[goType]
-			sqlType = sqlTypes[goType]
 		case *types.Named:
 			goType = ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
-			jsType = jsTypes[goType]
-			flowType = flowTypes[goType]
-			jsonType = jsTypes[goType]
-			sqlType = sqlTypes[goType]
 		default:
 			return nil, fmt.Errorf("unrecognised field type %s (%s)", ft.String(), f.Name())
 		}
+
+		jsType := jsTypes[goType]
+		flowType := flowTypes[goType]
+		swaggerType := getSwaggerType(goType)
+		sqlType := sqlTypes[goType]
 
 		if goType == "" {
 			return nil, fmt.Errorf("couldn't determine go type for %s (%s)", ft, f.Name())
@@ -1016,27 +1070,27 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 		var jsEnums []string
 		var flowEnums []string
-		var jsonEnums []string
+		var swaggerEnums []interface{}
 
 		if len(enums) > 0 {
 			switch jsType {
 			case "string":
 				jsEnums = make([]string, len(enums))
 				flowEnums = make([]string, len(enums))
-				jsonEnums = make([]string, len(enums))
+				swaggerEnums = make([]interface{}, len(enums))
 				for i := range enums {
 					jsEnums[i] = "'" + enums[i].Value + "'"
 					flowEnums[i] = "'" + enums[i].Value + "'"
-					jsonEnums[i] = enums[i].Value
+					swaggerEnums[i] = enums[i].Value
 				}
 			case "number":
 				jsEnums = make([]string, len(enums))
 				flowEnums = make([]string, len(enums))
-				jsonEnums = make([]string, len(enums))
+				swaggerEnums = make([]interface{}, len(enums))
 				for i := range enums {
 					jsEnums[i] = enums[i].Value
 					flowEnums[i] = enums[i].Value
-					jsonEnums[i] = enums[i].Value
+					swaggerEnums[i] = enums[i].Value
 				}
 			default:
 				return nil, fmt.Errorf("got enum values for %q but can't make js type for %q", f.Name(), jsType)
@@ -1048,31 +1102,29 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			flowType = "global_db_" + typeName + gf.GoName
 		}
 
+		if len(swaggerEnums) > 0 {
+			swaggerType.Enum = swaggerEnums
+		}
+
 		gf.GoType = goType
 		gf.JSType = jsType
 		gf.FlowType = flowType
-		gf.JSONType = map[string]interface{}{"type": jsonType}
+		gf.SwaggerType = swaggerType
 		gf.SQLType = sqlType
-
-		if len(jsonEnums) > 0 {
-			gf.JSONType["enum"] = jsonEnums
-		}
 
 		if isPointer {
 			gf.IsNull = true
 			gf.GoType = "*" + gf.GoType
 			gf.JSType = "?" + gf.JSType
 			gf.FlowType = "?" + gf.FlowType
+			gf.SwaggerType.Nullable = true
 		}
 		if isSlice {
 			gf.Array = true
 			gf.GoType = "[]" + gf.GoType
 			gf.JSType = "$ReadOnlyArray<" + gf.JSType + ">"
 			gf.FlowType = "$ReadOnlyArray<" + gf.FlowType + ">"
-			gf.JSONType = map[string]interface{}{
-				"type":  "array",
-				"items": gf.JSONType,
-			}
+			gf.SwaggerType = &SwaggerType{Type: "array", Items: gf.SwaggerType}
 		}
 
 		if scanType := scanTypes[gf.GoType]; scanType != "" {
@@ -1112,22 +1164,32 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			}
 
 			f := Filter{
-				Name:         name,
-				GoName:       goName,
-				JSType:       jsType,
-				FlowType:     flowType,
-				JSONType:     jsonType,
-				TestOperator: "typeof",
-				TestType:     jsType,
+				Operator:    "=",
+				Name:        name,
+				GoName:      goName,
+				JSType:      jsType,
+				FlowType:    flowType,
+				SwaggerType: swaggerType,
 			}
 
 			switch ft := ft.(type) {
 			case *types.Basic:
 				f.GoType = "*" + ft.String()
-				f.TestType = jsTypes[ft.String()]
 			case *types.Named:
 				f.GoType = "*" + ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
-				f.TestType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
+			}
+
+			switch f.Operator {
+			case "is_null", "is_not_null":
+				f.GoType = "*bool"
+				f.JSType = "boolean"
+				f.FlowType = "boolean"
+				f.SwaggerType = &SwaggerType{Type: "string", Enum: []interface{}{"true", "false"}}
+			case "in", "not_in", "@>", "!@>", "<@", "!<@", "&&", "!&&":
+				f.GoType = "[]" + strings.TrimPrefix(f.GoType, "*")
+				f.JSType = "$ReadOnlyArray<" + strings.TrimPrefix(f.JSType, "?") + ">"
+				f.FlowType = "$ReadOnlyArray<" + strings.TrimPrefix(f.FlowType, "?") + ">"
+				f.SwaggerType = &SwaggerType{Type: "array", Items: f.SwaggerType}
 			}
 
 			specialFilters = append(specialFilters, f)
@@ -1164,7 +1226,7 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				filterOptions = append(filterOptions, []string{"is_null"}, []string{"is_not_null"})
 			}
 
-			if len(jsonEnums) > 0 {
+			if len(swaggerEnums) > 0 {
 				filterOptions = append(filterOptions, []string{"in"}, []string{"not_in"})
 			}
 
@@ -1179,9 +1241,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 
 			jsName := apiName
 			goName := f.Name()
-			filterJSONType := jsonType
 			filterJSType := jsType
 			filterFlowType := flowType
+			filterSwaggerType := swaggerType
 			switch operator {
 			case "!=":
 				jsName = jsName + "Ne"
@@ -1213,15 +1275,15 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			case "is_null":
 				jsName = jsName + "IsNull"
 				goName = goName + "IsNull"
-				filterJSONType = "boolean"
 				filterJSType = "boolean"
 				filterFlowType = "boolean"
+				filterSwaggerType = &SwaggerType{Type: "string", Enum: []interface{}{"true", "false"}}
 			case "is_not_null":
 				jsName = jsName + "IsNotNull"
 				goName = goName + "IsNotNull"
-				filterJSONType = "boolean"
 				filterJSType = "boolean"
 				filterFlowType = "boolean"
+				filterSwaggerType = &SwaggerType{Type: "string", Enum: []interface{}{"true", "false"}}
 			case "@@":
 				jsName = jsName + "Match"
 				goName = goName + "Match"
@@ -1256,23 +1318,19 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			}
 
 			gff := Filter{
-				Operator:     operator,
-				Name:         jsName,
-				GoName:       goName,
-				JSType:       filterJSType,
-				FlowType:     filterFlowType,
-				JSONType:     filterJSONType,
-				TestOperator: "typeof",
-				TestType:     filterJSType,
+				Operator:    operator,
+				Name:        jsName,
+				GoName:      goName,
+				JSType:      filterJSType,
+				FlowType:    filterFlowType,
+				SwaggerType: filterSwaggerType,
 			}
 
 			switch ft := ft.(type) {
 			case *types.Basic:
 				gff.GoType = "*" + ft.String()
-				gff.TestType = jsTypes[ft.String()]
 			case *types.Named:
 				gff.GoType = "*" + ft.Obj().Pkg().Name() + "." + ft.Obj().Name()
-				gff.TestType = jsTypes[ft.Obj().Pkg().Name()+"."+ft.Obj().Name()]
 			}
 
 			switch operator {
@@ -1284,7 +1342,6 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				gff.GoType = "[]" + strings.TrimPrefix(gff.GoType, "*")
 				gff.JSType = "$ReadOnlyArray<" + strings.TrimPrefix(gff.JSType, "?") + ">"
 				gff.FlowType = "$ReadOnlyArray<" + strings.TrimPrefix(gff.FlowType, "?") + ">"
-				gff.TestOperator = "is_array"
 			}
 
 			gf.Filters = append(gf.Filters, gff)

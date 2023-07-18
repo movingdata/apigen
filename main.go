@@ -115,7 +115,6 @@ var (
 	flagGoDir             string
 	flagJSDir             string
 	flagFlowDir           string
-	flagSwaggerFile       string
 	flagFilters           filterList
 	flagDry               bool
 	flagDisableFormatting bool
@@ -127,7 +126,6 @@ func init() {
 	flag.StringVar(&flagGoDir, "go_dir", "", "Directory to output model code to (default is the same directory as the source files).")
 	flag.StringVar(&flagJSDir, "js_dir", "", "Directory to output JavaScript code to (default is ../client/src relative to the source files).")
 	flag.StringVar(&flagFlowDir, "flow_dir", "", "Directory to output Flow code to (default is ../static/flow/lib relative to the source files).")
-	flag.StringVar(&flagSwaggerFile, "swagger_file", "", "File to output Swagger schema to (default is ../static/swagger.json relative to the source files).")
 	flag.Var(&flagFilters, "filter", "Filter to only the specified models and writers.")
 	flag.BoolVar(&flagDry, "dry", false, "Dry run (don't write files).")
 	flag.BoolVar(&flagDisableFormatting, "disable_formatting", false, "Disable formatting (if applicable).")
@@ -232,11 +230,6 @@ func main() {
 			flowDir = filepath.Join(goDir, "../static/flow/lib")
 		}
 
-		swaggerFile := flagSwaggerFile
-		if swaggerFile == "" {
-			swaggerFile = filepath.Join(goDir, "../static/swagger.json")
-		}
-
 		generatorList := []generator{
 			NewAPIGenerator(goDir),
 			NewAPIFilterGenerator(goDir),
@@ -245,7 +238,6 @@ func main() {
 			NewFlowGenerator(flowDir),
 			NewSchemaGenerator(goDir),
 			NewSQLGenerator(goDir),
-			NewSwaggerGenerator(swaggerFile),
 		}
 
 		packageName := pkg.Types.Name()

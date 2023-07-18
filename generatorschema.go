@@ -89,6 +89,18 @@ var (
 		APIType: "{{$Field.JSType}}",
 		Array: {{if $Field.Array}}true{{else}}false{{end}},
 		NotNull: {{if $Field.IsNull}}false{{else}}true{{end}},
+{{- if $Field.Enum}}
+		Enum: []apitypes.Enum{
+{{- range $Enum := $Field.Enum}}
+			apitypes.Enum{Value: "{{$Enum.Value}}", Label: "{{$Enum.Label}}"},
+{{- end}}
+		},
+{{- end}}
+		Filters: []*apitypes.Filter{
+{{- range $Filter := $Field.Filters}}
+			&apitypes.Filter{Operator: "{{$Filter.Operator}}", Name: "{{$Filter.Name}}", GoName: "{{$Filter.GoName}}", GoType: "{{$Filter.GoType}}"},
+{{- end}}
+		},
 	}
 {{- end}}
 )
@@ -102,6 +114,15 @@ var Model = &apitypes.Model{
 		Field{{$Field.GoName}},
 {{- end}}
 	},
+	SpecialFilters: []*apitypes.Filter{
+{{- range $Filter := $Model.SpecialFilters}}
+		&apitypes.Filter{Operator: "{{$Filter.Operator}}", Name: "{{$Filter.Name}}", GoName: "{{$Filter.GoName}}", GoType: "{{$Filter.GoType}}"},
+{{- end}}
+	},
+}
+
+func init() {
+	Model.FlattenFilters()
 }
 
 var Relations = []*apitypes.Relation{
