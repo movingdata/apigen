@@ -96,6 +96,7 @@ var upperCaseOverrides = []string{
 	"NBN",
 	"PM",
 	"SIM",
+	"SMDM",
 	"UI",
 	"UNMS",
 	"VISP",
