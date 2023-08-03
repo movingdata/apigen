@@ -28,6 +28,8 @@ var jsTemplate = `
 
 // @flow
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 import axios from 'axios';
 import { useContext, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';

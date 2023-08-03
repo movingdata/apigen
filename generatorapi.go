@@ -53,6 +53,8 @@ func (g *APIGenerator) Model(model *Model) []writer {
 var apiTemplate = `
 {{$Model := .Model}}
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 func init() {
   modelutil.RegisterFinder("{{$Model.Singular}}", func(ctx context.Context, db modelutil.RowQueryerContext, id interface{}, uid, euid *uuid.UUID) (interface{}, error) {
     idValue, ok := id.({{$Model.IDField.GoType}})

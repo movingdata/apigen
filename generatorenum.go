@@ -33,6 +33,8 @@ func (g *EnumGenerator) Model(model *Model) []writer {
 var enumTemplate = `
 {{$Model := .Model}}
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 {{- range $Field := $Model.Fields}}
 {{- if $Field.Enum}}
 const (

@@ -69,6 +69,8 @@ func (g *APIFilterGenerator) Models(models []*Model) []writer {
 var apifilterTemplate = `
 {{$Model := .Model}}
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 {{range $Filter := $Model.SpecialFilters}}
 var specialFilter{{$Filter.GoName}} func({{$Filter.GoType | UnPtr}}) sqlbuilder.AsExpr
 func RegisterSpecialFilter{{$Filter.GoName}}(fn func({{$Filter.GoType | UnPtr}}) sqlbuilder.AsExpr) {
@@ -184,6 +186,8 @@ func (p *SearchParameters) AddLimits(q *sqlbuilder.SelectStatement) *sqlbuilder.
 
 var apifilterFinishTemplate = `
 {{$Models := .Models}}
+
+// Please note: this file is generated from the models package
 
 func init() {
 {{- range $Model := $Models}}

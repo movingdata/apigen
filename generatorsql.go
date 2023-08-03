@@ -42,6 +42,8 @@ func (g *SQLGenerator) Model(model *Model) []writer {
 var sqlTemplate = `
 {{$Model := .Model}}
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 {{if $Model.HasSQLFindOne}}
 // {{$Model.Singular}}SQLFindOne gets a single {{$Model.Singular}} record from the database according to a query
 func {{$Model.Singular}}SQLFindOne(ctx context.Context, db modelutil.RowQueryerContext, fn func(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement) (*{{$Model.Singular}}, error) {

@@ -59,6 +59,8 @@ func (g *FlowGenerator) Models(models []*Model) []writer {
 var flowTemplate = `
 {{$Model := .Model}}
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 {{range $Field := $Model.Fields}}
 {{- if $Field.Enum}}
 type global_db_{{$Model.Singular}}{{$Field.GoName}} =
@@ -101,6 +103,8 @@ type global_db_{{$Model.Singular}}_SearchResponse = {|
 
 var flowFinishTemplate = `
 {{$Models := .Models}}
+
+// Please note: this file is generated from the models package
 
 type global_db_CallbackSpecifier = {|
   model?: string,

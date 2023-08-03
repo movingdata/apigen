@@ -55,6 +55,8 @@ func (g *SchemaGenerator) Models(models []*Model) []writer {
 var schemaTemplate = `
 {{$Model := .Model}}
 
+// Please note: this file is generated from {{$Model.Singular | LC}}.go
+
 // Table is a symbolic identifier for the "{{$Model.SQLTableName}}" table
 var Table = sqlbuilder.NewTable(
 	"{{$Model.SQLTableName}}",
@@ -141,6 +143,8 @@ var Relations = []*apitypes.Relation{
 
 var schemaFinishTemplate = `
 {{$Models := .Models}}
+
+// Please note: this file is generated from the models package
 
 var Tables = map[string]*sqlbuilder.Table{
 {{- range $Model := $Models}}
