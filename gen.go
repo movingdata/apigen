@@ -1219,7 +1219,13 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 				filterOptions = [][]string{{"="}, {"!="}, {"<"}, {"<="}, {">"}, {">="}}
 
 				if isPointer {
-					filterOptions = append(filterOptions, []string{"is_null_or_less_than"}, []string{"is_null_or_greater_than"})
+					filterOptions = append(
+						filterOptions,
+						[]string{"is_null_or_less_than"},
+						[]string{"is_null_or_less_than_or_equal_to"},
+						[]string{"is_null_or_greater_than"},
+						[]string{"is_null_or_greater_than_or_equal_to"},
+					)
 				}
 			}
 
@@ -1258,6 +1264,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			case "is_null_or_less_than":
 				jsName = jsName + "IsNullOrLessThan"
 				goName = goName + "IsNullOrLessThan"
+			case "is_null_or_less_than_or_equal_to":
+				jsName = jsName + "IsNullOrLessThanOrEqualTo"
+				goName = goName + "IsNullOrLessThanOrEqualTo"
 			case ">":
 				jsName = jsName + "Gt"
 				goName = goName + "Gt"
@@ -1267,6 +1276,9 @@ func makeModel(typeName string, namedType *types.Named, structType *types.Struct
 			case "is_null_or_greater_than":
 				jsName = jsName + "IsNullOrGreaterThan"
 				goName = goName + "IsNullOrGreaterThan"
+			case "is_null_or_greater_than_or_equal_to":
+				jsName = jsName + "IsNullOrGreaterThanOrEqualTo"
+				goName = goName + "IsNullOrGreaterThanOrEqualTo"
 			case "in":
 				jsName = jsName + "In"
 				goName = goName + "In"
