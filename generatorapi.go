@@ -312,6 +312,133 @@ func {{$Model.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContext
   return &m, nil
 }
 
+func (jsctx *JSContext) {{$Model.Singular}}AggregateCount(fieldNames []string, p {{(PackageName "apifilter" $Model.Singular)}}.FilterParameters) *modelutil.AggregateCountResult {
+  items, err := {{$Model.Singular}}APIAggregateCount(jsctx.ctx, jsctx.tx, fieldNames, &p, &jsctx.uid, &jsctx.euid)
+  if err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+  return items
+}
+
+func {{$Model.Singular}}APIAggregateCount(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, fieldNames []string, p *{{(PackageName "apifilter" $Model.Singular)}}.FilterParameters, uid, euid *uuid.UUID) (*modelutil.AggregateCountResult, error) {
+  var fields []*apitypes.Field
+  var columns []sqlbuilder.AsExpr
+  for _, fieldName := range fieldNames {
+    switch fieldName {
+{{- range $Field := $Model.Fields}}
+{{- if $Field.Enum}}
+    case "{{$Field.GoName}}", "{{$Field.APIName}}":
+      fields = append(fields, {{(PackageName "schema" $Model.Singular)}}.Field{{$Field.GoName}})
+      columns = append(columns, {{(PackageName "schema" $Model.Singular)}}.Column{{$Field.GoName}})
+{{- end}}
+{{- end}}
+    default:
+      return nil, fmt.Errorf("{{$Model.Singular}}APIAggregateCount: field %q does not exist or is not countable")
+    }
+  }
+
+  qb := sqlbuilder.Select().From({{(PackageName "schema" $Model.Singular)}}.Table).Columns(
+    append(columns[:], sqlbuilder.Func("count", sqlbuilder.Literal("*")))...
+  ).GroupBy(columns...)
+
+{{- if $Model.HasUserFilter}}
+  qb = {{$Model.Singular}}UserFilter(qb, euid)
+{{- end}}
+
+  qb = p.AddFilters(qb)
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return nil, fmt.Errorf("{{$Model.Singular}}APIAggregateCount: couldn't generate query: %w", err)
+  }
+
+  rows, err := db.QueryContext(ctx, qs, qv...)
+  if err != nil {
+    return nil, fmt.Errorf("{{$Model.Singular}}APIAggregateCount: couldn't perform result query: %w", err)
+  }
+  defer rows.Close()
+
+  items := []modelutil.AggregateCountItem{}
+
+  for rows.Next() {
+    values := make([]string, len(fields))
+    var count int
+
+    out := make([]interface{}, len(fields)+1)
+    for i := range values {
+      out[i] = &values[i]
+    }
+    out[len(out)-1] = &count
+
+    if err := rows.Scan(out...); err != nil {
+      return nil, fmt.Errorf("{{$Model.Singular}}APIAggregateCount: couldn't scan output row: %w", err)
+    }
+
+    items = append(items, modelutil.AggregateCountItem{Values: values, Count: count})
+  }
+
+  if err := rows.Close(); err != nil {
+    return nil, fmt.Errorf("{{$Model.Singular}}APIAggregateCount: couldn't close row set: %w", err)
+  }
+
+  return &modelutil.AggregateCountResult{Fields: fields, Items: items}, nil
+}
+
+{{range $Field := $Model.Fields}}
+{{- if $Field.Enum}}
+func (jsctx *JSContext) {{$Model.Singular}}Count{{$Field.GoName}}(p {{(PackageName "apifilter" $Model.Singular)}}.FilterParameters) map[string]int {
+  counts, err := {{$Model.Singular}}APICount{{$Field.GoName}}(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
+  if err != nil {
+    panic(jsctx.vm.MakeCustomError("InternalError", err.Error()))
+  }
+  return counts
+}
+
+func {{$Model.Singular}}APICount{{$Field.GoName}}(ctx context.Context, db modelutil.QueryerContextAndRowQueryerContext, p *{{(PackageName "apifilter" $Model.Singular)}}.FilterParameters, uid, euid *uuid.UUID) (map[string]int, error) {
+  qb := sqlbuilder.Select().From({{(PackageName "schema" $Model.Singular)}}.Table).Columns(
+    {{(PackageName "schema" $Model.Singular)}}.Column{{$Field.GoName}},
+    sqlbuilder.Func("count", sqlbuilder.Literal("*")),
+  ).GroupBy({{(PackageName "schema" $Model.Singular)}}.Column{{$Field.GoName}})
+
+{{- if $Model.HasUserFilter}}
+  qb = {{$Model.Singular}}UserFilter(qb, euid)
+{{- end}}
+
+  qb = p.AddFilters(qb)
+
+  qs, qv, err := sqlbuilder.NewSerializer(sqlbuilder.DialectPostgres{}).F(qb.AsStatement).ToSQL()
+  if err != nil {
+    return nil, fmt.Errorf("{{$Model.Singular}}APICount{{$Field.GoName}}: couldn't generate query: %w", err)
+  }
+
+  rows, err := db.QueryContext(ctx, qs, qv...)
+  if err != nil {
+    return nil, fmt.Errorf("{{$Model.Singular}}APICount{{$Field.GoName}}: couldn't perform result query: %w", err)
+  }
+  defer rows.Close()
+
+  counts := make(map[string]int)
+
+  for rows.Next() {
+    var value string
+    var count int
+
+    if err := rows.Scan(&value, &count); err != nil {
+      return nil, fmt.Errorf("{{$Model.Singular}}APICount{{$Field.GoName}}: couldn't scan output row: %w", err)
+    }
+
+    counts[value] = count
+  }
+
+  if err := rows.Close(); err != nil {
+    return nil, fmt.Errorf("{{$Model.Singular}}APICount{{$Field.GoName}}: couldn't close row set: %w", err)
+  }
+
+  return counts, nil
+}
+{{- end}}
+{{end}}
+
 func {{$Model.Singular}}APIHandleSearch(rw http.ResponseWriter, r *http.Request, mctx *modelutil.ModelContext, db *sql.DB, uid, euid *uuid.UUID) {
   var p {{(PackageName "apifilter" $Model.Singular)}}.SearchParameters
   if err := modelutil.DecodeStruct(r.URL.Query(), &p); err != nil {
