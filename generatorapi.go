@@ -188,6 +188,12 @@ type {{$Model.Singular}}APISearchResponse struct {
   Time time.Time "json:\"time\""
 }
 
+func (r *{{$Model.Singular}}APISearchResponse) ForEach(fn func(v *{{$Model.Singular}}, i int, r *{{$Model.Singular}}APISearchResponse)) {
+  for i := 0; i < len(r.Records); i++ {
+    fn(r.Records[i], i, r)
+  }
+}
+
 func (jsctx *JSContext) {{$Model.Singular}}Search(p {{(PackageName "apifilter" $Model.Singular)}}.SearchParameters) *{{$Model.Singular}}APISearchResponse {
   v, err := {{$Model.Singular}}APISearch(jsctx.ctx, jsctx.tx, &p, &jsctx.uid, &jsctx.euid)
   if err != nil {
