@@ -294,7 +294,7 @@ func {{$Model.Singular}}APIFind(ctx context.Context, db modelutil.QueryerContext
 {{range $Field := $Model.Fields}}
   {{if $Field.ScanType}}var x{{$Field.GoName}} {{$Field.ScanType}}{{end}}
 {{- end}}
-  if err := db.QueryRowContext(ctx, qs1, qv1...).Scan({{range $i, $Field := $Model.Fields}}{{if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}}, {{end}}); err != nil {
+  if err := db.QueryRowContext(ctx, qs1, qv1...).Scan({{range $i, $Field := $Model.Fields}}{{if $Field.ScanType}}&x{{$Field.GoName}}{{else if $Field.Array}}pq.Array(&m.{{$Field.GoName}}){{else}}&m.{{$Field.GoName}}{{end}} /* {{$i}} */, {{end}}); err != nil {
     if err == sql.ErrNoRows {
       return nil, nil
     }

@@ -346,6 +346,7 @@ func pluralFor(s string) string {
 var scanTypes = map[string]string{
 	"[]time.Time":     "sqltypes.TimeArray",
 	"[]time.Duration": "sqltypes.DurationArray",
+	"[]*int":          "sqltypes.IntPointerArray",
 }
 
 var formatTypes = map[string]string{
@@ -633,6 +634,8 @@ var tplFunc = template.FuncMap{
 			return fmt.Sprintf("%s != %s", arg1, arg2)
 		case type1 == "*int" && type2 == "*int":
 			return fmt.Sprintf("((%s == nil && %s != nil) || (%s != nil && %s == nil) || (%s != nil && %s != nil && *%s != *%s))", arg1, arg2, arg1, arg2, arg1, arg2, arg1, arg2)
+		case type1 == "[]*int" && type2 == "[]*int":
+			return fmt.Sprintf("!modelutil.Equal(%s, %s)", arg1, arg2)
 		case type1 == "float64" && type2 == "float64":
 			return fmt.Sprintf("%s != %s", arg1, arg2)
 		case type1 == "*float64" && type2 == "*float64":
