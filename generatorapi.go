@@ -251,8 +251,10 @@ func {{$Model.Singular}}APISearch(ctx context.Context, db modelutil.QueryerConte
   }
 
   var total int
-  if err := db.QueryRowContext(ctx, qs2, qv2...).Scan(&total); err != nil {
-    return nil, fmt.Errorf("{{$Model.Singular}}APISearch: couldn't perform summary query: %w", err)
+  if p.Total == nil || *p.Total == "include" {
+    if err := db.QueryRowContext(ctx, qs2, qv2...).Scan(&total); err != nil {
+      return nil, fmt.Errorf("{{$Model.Singular}}APISearch: couldn't perform summary query: %w", err)
+    }
   }
 
   return &{{$Model.Singular}}APISearchResponse{

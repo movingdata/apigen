@@ -124,6 +124,7 @@ type SearchParameters struct {
   Order *string "schema:\"order\" json:\"order,omitempty\""
   Offset *int "schema:\"offset\" json:\"offset,omitempty\""
   Limit *int "schema:\"limit\" json:\"limit,omitempty\""
+  Total *string "schema:\"total\" json:\"total,omitempty\""
 }
 
 func (p *SearchParameters) AddFilters(q *sqlbuilder.SelectStatement) *sqlbuilder.SelectStatement {
